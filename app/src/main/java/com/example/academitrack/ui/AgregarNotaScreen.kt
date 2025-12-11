@@ -1,11 +1,14 @@
 package com.academitrack.app.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.academitrack.app.domain.*
 
@@ -13,12 +16,23 @@ import com.academitrack.app.domain.*
 @Composable
 fun AgregarNotaScreen(
     curso: Curso,
+    maxPorcentajeDisponible: Double, // Límite para validar
     onVolverClick: () -> Unit,
     onGuardar: (EvaluacionManual) -> Unit
 ) {
     var nombre by remember { mutableStateOf("") }
     var porcentaje by remember { mutableStateOf("") }
     var nota by remember { mutableStateOf("") }
+
+    // Validaciones en tiempo real
+    val porcentajeVal = porcentaje.toDoubleOrNull() ?: 0.0
+    // Error si es mayor al disponible o menor que 0
+    val esPorcentajeInvalido = porcentajeVal > maxPorcentajeDisponible || porcentajeVal < 0
+
+    val mensajeErrorPorcentaje = if (porcentajeVal > maxPorcentajeDisponible) {
+        "Máximo permitido: ${maxPorcentajeDisponible.toInt()}%"
+    } else null
+
     var showError by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -53,20 +67,40 @@ fun AgregarNotaScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // Campo Porcentaje con Validación
             OutlinedTextField(
                 value = porcentaje,
-                onValueChange = { porcentaje = it },
+                onValueChange = {
+                    // Solo permitir números y punto
+                    if (it.all { char -> char.isDigit() || char == '.' }) {
+                        porcentaje = it
+                    }
+                },
                 label = { Text("Porcentaje (%)") },
-                placeholder = { Text("Ej: 30") },
-                modifier = Modifier.fillMaxWidth()
+                placeholder = { Text("Disponible: ${maxPorcentajeDisponible.toInt()}%") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                isError = esPorcentajeInvalido,
+                supportingText = {
+                    if (esPorcentajeInvalido && mensajeErrorPorcentaje != null) {
+                        Text(mensajeErrorPorcentaje, color = MaterialTheme.colorScheme.error)
+                    } else {
+                        Text("Restante disponible: ${maxPorcentajeDisponible.toInt()}%")
+                    }
+                }
             )
 
             OutlinedTextField(
                 value = nota,
-                onValueChange = { nota = it },
+                onValueChange = {
+                    if (it.all { char -> char.isDigit() || char == '.' }) {
+                        nota = it
+                    }
+                },
                 label = { Text("Nota obtenida (1.0 - 7.0)") },
                 placeholder = { Text("Ej: 5.5") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
 
             if (showError) {
@@ -76,7 +110,7 @@ fun AgregarNotaScreen(
                     )
                 ) {
                     Text(
-                        text = "⚠️ Por favor completa todos los campos correctamente",
+                        text = "⚠️ Por favor verifica los datos ingresados",
                         modifier = Modifier.padding(12.dp),
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
@@ -88,8 +122,9 @@ fun AgregarNotaScreen(
                     val porc = porcentaje.toDoubleOrNull()
                     val notaVal = nota.toDoubleOrNull()
 
+                    // Validación Final antes de guardar
                     if (nombre.isNotBlank() &&
-                        porc != null && porc in 0.0..100.0 &&
+                        porc != null && porc > 0 && !esPorcentajeInvalido &&
                         notaVal != null && notaVal in 1.0..7.0) {
 
                         val eval = EvaluacionManual(
@@ -107,29 +142,10 @@ fun AgregarNotaScreen(
                         showError = true
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !esPorcentajeInvalido // Bloquear botón si hay error
             ) {
                 Text("💾 Guardar Nota")
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                )
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "💡 Tip:",
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    Text(
-                        text = "También puedes usar la función de IA para procesar fotos automáticamente",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
             }
         }
     }

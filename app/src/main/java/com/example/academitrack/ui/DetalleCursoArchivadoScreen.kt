@@ -257,3 +257,8 @@ fun DetalleCursoArchivadoScreen(
         )
     }
 }
+
+@Composable
+fun EvaluacionCard(x0: Evaluacion) {
+    TODO("Not yet implemented")
+}

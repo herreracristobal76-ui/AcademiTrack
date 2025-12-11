@@ -1,21 +1,20 @@
 package com.academitrack.app.domain
 
-data class EvaluacionFotografica(
+data class EvaluacionManual(
     private val id: String,
     private val nombreEval: String,
     private val porcentajeEval: Double,
     private val fechaEval: Long,
     private val idCursoEval: String,
-    private var rutaImagen: String,
-    private var confianzaIA: Double = 0.0,
-    private var datosExtraidosIA: String = ""
+    private var notaMaxima: Double = 7.0,
+    private var descripcion: String = ""
 ) : Evaluacion(id, nombreEval, porcentajeEval, fechaEval, idCursoEval) {
 
-    fun getRutaImagen(): String = rutaImagen
-    fun getConfianzaIA(): Double = confianzaIA
+    fun getNotaMaxima(): Double = notaMaxima
+    fun getDescripcion(): String = descripcion
 
-    fun setConfianzaIA(confianza: Double) {
-        if (confianza in 0.0..100.0) confianzaIA = confianza
+    fun setNotaMaxima(maxima: Double) {
+        if (maxima in 1.0..7.0) notaMaxima = maxima
     }
 
     override fun calcularNotaPonderada(): Double {
@@ -23,11 +22,11 @@ data class EvaluacionFotografica(
     }
 
     override fun calcularPuntosObtenidos(): Double {
-        return ((notaObtenida ?: 0.0) / 7.0) * getPorcentaje()
+        return ((notaObtenida ?: 0.0) / notaMaxima) * getPorcentaje()
     }
 
     override fun obtenerTipoEvaluacion(): String {
-        return "Evaluación Fotográfica (IA)"
+        return "Evaluación Manual"
     }
 
     override fun obtenerResumen(): String {
@@ -35,12 +34,7 @@ data class EvaluacionFotografica(
             ${obtenerTipoEvaluacion()}
             Nombre: ${getNombre()}
             Porcentaje: ${getPorcentaje()}%
-            Nota: ${notaObtenida ?: "Pendiente"}
-            Confianza IA: $confianzaIA%
+            Nota: ${notaObtenida ?: "Pendiente"}/$notaMaxima
         """.trimIndent()
-    }
-
-    fun requiereVerificacionManual(): Boolean {
-        return confianzaIA < 80.0
     }
 }

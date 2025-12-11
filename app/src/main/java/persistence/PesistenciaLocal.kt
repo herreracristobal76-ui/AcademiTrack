@@ -3,6 +3,7 @@ package com.academitrack.app.persistence
 import android.content.Context
 import android.content.SharedPreferences
 import com.academitrack.app.domain.*
+import com.academitrack.app.ui.NotificacionConfig
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -29,6 +30,7 @@ class PersistenciaLocal(private val context: Context) {
                     put("idSemestre", curso.getIdSemestre() ?: "")
                     put("notaFinal", curso.getNotaFinal() ?: 0.0)
                     put("fechaArchivado", curso.getFechaArchivado() ?: 0L)
+                    put("color", curso.getColor()) // NUEVO: Guardar color
                 }
                 jsonArray.put(jsonObj)
             }
@@ -79,6 +81,7 @@ class PersistenciaLocal(private val context: Context) {
                 val idSemestre = obj.optString("idSemestre", "").takeIf { it.isNotEmpty() }
                 val notaFinal = obj.optDouble("notaFinal").takeIf { it != 0.0 }
                 val fechaArchivado = obj.optLong("fechaArchivado").takeIf { it != 0L }
+                val color = obj.optString("color", "#4F46E5") // NUEVO: Cargar color
 
                 val curso = Curso(
                     idCurso = obj.getString("id"),
@@ -91,7 +94,8 @@ class PersistenciaLocal(private val context: Context) {
                     estado = estado,
                     idSemestre = idSemestre,
                     notaFinal = notaFinal,
-                    fechaArchivado = fechaArchivado
+                    fechaArchivado = fechaArchivado,
+                    color = color
                 )
                 cursos.add(curso)
             }
@@ -103,6 +107,7 @@ class PersistenciaLocal(private val context: Context) {
         }
     }
 
+    // ... (El resto de funciones se mantienen igual, pero las incluyo completas para evitar errores)
     fun guardarHorarios(clases: List<ClaseHorario>): Boolean {
         return try {
             val jsonArray = JSONArray()
@@ -121,28 +126,20 @@ class PersistenciaLocal(private val context: Context) {
                 }
                 jsonArray.put(jsonObj)
             }
-
             val file = File(context.filesDir, "horarios_$fileName")
             file.writeText(jsonArray.toString())
             true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
-        }
+        } catch (e: Exception) { e.printStackTrace(); false }
     }
 
     fun cargarHorarios(): List<ClaseHorario> {
         return try {
             val file = File(context.filesDir, "horarios_$fileName")
             if (!file.exists()) return emptyList()
-
-            val jsonString = file.readText()
-            val jsonArray = JSONArray(jsonString)
+            val jsonArray = JSONArray(file.readText())
             val clases = mutableListOf<ClaseHorario>()
-
             for (i in 0 until jsonArray.length()) {
                 val obj = jsonArray.getJSONObject(i)
-
                 val clase = ClaseHorario(
                     id = obj.getString("id"),
                     idCurso = obj.getString("idCurso"),
@@ -157,20 +154,8 @@ class PersistenciaLocal(private val context: Context) {
                 )
                 clases.add(clase)
             }
-
             clases
-        } catch (e: Exception) {
-            e.printStackTrace()
-            emptyList()
-        }
-    }
-
-    fun guardarPreferenciaModoOscuro(modoOscuro: Boolean) {
-        prefs.edit().putBoolean("modo_oscuro", modoOscuro).apply()
-    }
-
-    fun cargarPreferenciaModoOscuro(): Boolean {
-        return prefs.getBoolean("modo_oscuro", false)
+        } catch (e: Exception) { e.printStackTrace(); emptyList() }
     }
 
     fun guardarEvaluaciones(evaluaciones: Map<String, Evaluacion>): Boolean {
@@ -185,7 +170,6 @@ class PersistenciaLocal(private val context: Context) {
                     put("idCurso", eval.getIdCurso())
                     put("notaObtenida", eval.notaObtenida)
                     put("estado", eval.estado.name)
-
                     when (eval) {
                         is EvaluacionManual -> {
                             put("tipo", "manual")
@@ -201,29 +185,21 @@ class PersistenciaLocal(private val context: Context) {
                 }
                 jsonArray.put(jsonObj)
             }
-
             val file = File(context.filesDir, "evaluaciones_$fileName")
             file.writeText(jsonArray.toString())
             true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
-        }
+        } catch (e: Exception) { e.printStackTrace(); false }
     }
 
     fun cargarEvaluaciones(): Map<String, Evaluacion> {
         return try {
             val file = File(context.filesDir, "evaluaciones_$fileName")
             if (!file.exists()) return emptyMap()
-
-            val jsonString = file.readText()
-            val jsonArray = JSONArray(jsonString)
+            val jsonArray = JSONArray(file.readText())
             val evaluaciones = mutableMapOf<String, Evaluacion>()
-
             for (i in 0 until jsonArray.length()) {
                 val obj = jsonArray.getJSONObject(i)
                 val tipo = obj.getString("tipo")
-
                 val eval: Evaluacion = when (tipo) {
                     "manual" -> EvaluacionManual(
                         id = obj.getString("id"),
@@ -245,20 +221,14 @@ class PersistenciaLocal(private val context: Context) {
                     )
                     else -> continue
                 }
-
                 if (!obj.isNull("notaObtenida")) {
                     eval.setNotaObtenida(obj.getDouble("notaObtenida"))
                 }
                 eval.estado = EstadoEvaluacion.valueOf(obj.getString("estado"))
-
                 evaluaciones[eval.getId()] = eval
             }
-
             evaluaciones
-        } catch (e: Exception) {
-            e.printStackTrace()
-            emptyMap()
-        }
+        } catch (e: Exception) { e.printStackTrace(); emptyMap() }
     }
 
     fun guardarAsistencias(asistencias: Map<String, Asistencia>): Boolean {
@@ -274,28 +244,20 @@ class PersistenciaLocal(private val context: Context) {
                 }
                 jsonArray.put(jsonObj)
             }
-
             val file = File(context.filesDir, "asistencias_$fileName")
             file.writeText(jsonArray.toString())
             true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
-        }
+        } catch (e: Exception) { e.printStackTrace(); false }
     }
 
     fun cargarAsistencias(): Map<String, Asistencia> {
         return try {
             val file = File(context.filesDir, "asistencias_$fileName")
             if (!file.exists()) return emptyMap()
-
-            val jsonString = file.readText()
-            val jsonArray = JSONArray(jsonString)
+            val jsonArray = JSONArray(file.readText())
             val asistencias = mutableMapOf<String, Asistencia>()
-
             for (i in 0 until jsonArray.length()) {
                 val obj = jsonArray.getJSONObject(i)
-
                 val asist = Asistencia(
                     idAsistencia = obj.getString("id"),
                     idCurso = obj.getString("idCurso"),
@@ -303,18 +265,13 @@ class PersistenciaLocal(private val context: Context) {
                     estado = EstadoAsistencia.valueOf(obj.getString("estado")),
                     observacion = obj.optString("observacion", "")
                 )
-
                 asistencias[asist.getId()] = asist
             }
-
             asistencias
-        } catch (e: Exception) {
-            e.printStackTrace()
-            emptyMap()
-        }
+        } catch (e: Exception) { e.printStackTrace(); emptyMap() }
     }
 
-    fun guardarConfigNotificacion(cursoId: String, config: com.academitrack.app.ui.NotificacionConfig) {
+    fun guardarConfigNotificacion(cursoId: String, config: NotificacionConfig) {
         prefs.edit().apply {
             putBoolean("notif_activo_$cursoId", config.activo)
             putInt("notif_hora_$cursoId", config.hora)
@@ -323,8 +280,8 @@ class PersistenciaLocal(private val context: Context) {
         }
     }
 
-    fun cargarConfigNotificacion(cursoId: String): com.academitrack.app.ui.NotificacionConfig {
-        return com.academitrack.app.ui.NotificacionConfig(
+    fun cargarConfigNotificacion(cursoId: String): NotificacionConfig {
+        return NotificacionConfig(
             activo = prefs.getBoolean("notif_activo_$cursoId", false),
             hora = prefs.getInt("notif_hora_$cursoId", 20),
             minuto = prefs.getInt("notif_minuto_$cursoId", 0)
@@ -338,8 +295,47 @@ class PersistenciaLocal(private val context: Context) {
             File(context.filesDir, "asistencias_$fileName").delete()
             File(context.filesDir, "horarios_$fileName").delete()
             prefs.edit().clear().apply()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        } catch (e: Exception) { e.printStackTrace() }
+    }
+
+    fun exportarDatosGlobales(): String {
+        return try {
+            val root = JSONObject()
+            fun leerArchivo(prefijo: String): JSONArray {
+                val file = File(context.filesDir, "${prefijo}_$fileName")
+                return if (file.exists()) JSONArray(file.readText()) else JSONArray()
+            }
+            root.put("version", 1)
+            root.put("timestamp", System.currentTimeMillis())
+            root.put("cursos", leerArchivo("cursos"))
+            root.put("horarios", leerArchivo("horarios"))
+            root.put("evaluaciones", leerArchivo("evaluaciones"))
+            root.put("asistencias", leerArchivo("asistencias"))
+            root.toString()
+        } catch (e: Exception) { e.printStackTrace(); "" }
+    }
+
+    fun importarDatosGlobales(jsonString: String): Boolean {
+        return try {
+            val root = JSONObject(jsonString)
+            fun guardarArchivo(prefijo: String, key: String) {
+                val data = root.optJSONArray(key) ?: JSONArray()
+                val file = File(context.filesDir, "${prefijo}_$fileName")
+                file.writeText(data.toString())
+            }
+            guardarArchivo("cursos", "cursos")
+            guardarArchivo("horarios", "horarios")
+            guardarArchivo("evaluaciones", "evaluaciones")
+            guardarArchivo("asistencias", "asistencias")
+            true
+        } catch (e: Exception) { e.printStackTrace(); false }
+    }
+
+    fun guardarPreferenciaModoOscuro(modoOscuro: Boolean) {
+        prefs.edit().putBoolean("modo_oscuro", modoOscuro).apply()
+    }
+
+    fun cargarPreferenciaModoOscuro(): Boolean {
+        return prefs.getBoolean("modo_oscuro", false)
     }
 }

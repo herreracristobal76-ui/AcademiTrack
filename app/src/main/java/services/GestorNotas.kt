@@ -3,80 +3,40 @@ package com.academitrack.app.services
 import com.academitrack.app.domain.*
 
 class GestorNotas {
-
     private val evaluaciones = mutableMapOf<String, Evaluacion>()
 
     fun calcularPromedioActual(idCurso: String): Double {
-        val evaluacionesCurso = evaluaciones.values.filter {
-            it.getIdCurso() == idCurso && it.notaObtenida != null
+        val evalCurso = evaluaciones.values.filter { it.getIdCurso() == idCurso && it.notaObtenida != null }
+        if (evalCurso.isEmpty()) return 0.0
+        var suma = 0.0
+        var peso = 0.0
+        evalCurso.forEach {
+            suma += it.calcularNotaPonderada()
+            peso += it.getPorcentaje()
         }
-
-        if (evaluacionesCurso.isEmpty()) return 0.0
-
-        var sumaPonderada = 0.0
-        var porcentajeAcumulado = 0.0
-
-        evaluacionesCurso.forEach { eval ->
-            sumaPonderada += eval.calcularNotaPonderada()
-            porcentajeAcumulado += eval.getPorcentaje()
-        }
-
-        return if (porcentajeAcumulado > 0) {
-            (sumaPonderada / porcentajeAcumulado) * 100.0 / 100.0
-        } else 0.0
+        return if (peso > 0) suma / (peso / 100.0) else 0.0
     }
 
-    fun calcularNotaNecesaria(
-        idCurso: String,
-        notaObjetivo: Double,
-        curso: Curso
-    ): ResultadoProyeccion {
-        val evaluacionesCurso = evaluaciones.values.filter { it.getIdCurso() == idCurso }
-        val realizadas = evaluacionesCurso.filter { it.notaObtenida != null }
-        val pendientes = evaluacionesCurso.filter { it.notaObtenida == null }
+    fun calcularPorcentajeTotal(idCurso: String): Double = evaluaciones.values.filter { it.getIdCurso() == idCurso }.sumOf { it.getPorcentaje() }
+    fun calcularPuntosAcumulados(idCurso: String): Double = evaluaciones.values.filter { it.getIdCurso() == idCurso && it.notaObtenida != null }.sumOf { it.calcularNotaPonderada() }
+    fun calcularPorcentajeEvaluado(idCurso: String): Double = evaluaciones.values.filter { it.getIdCurso() == idCurso && it.notaObtenida != null }.sumOf { it.getPorcentaje() }
 
-        var puntosActuales = 0.0
-        realizadas.forEach { eval ->
-            puntosActuales += eval.calcularPuntosObtenidos()
-        }
+    fun calcularNotaNecesaria(idCurso: String, notaObjetivo: Double, curso: Curso): ResultadoProyeccion {
+        val evalCurso = evaluaciones.values.filter { it.getIdCurso() == idCurso }
+        val realizadas = evalCurso.filter { it.notaObtenida != null }
+        val pendientes = evalCurso.filter { it.notaObtenida == null }
+        var ptsActuales = realizadas.sumOf { it.calcularPuntosObtenidos() }
+        var porcRestante = pendientes.sumOf { it.getPorcentaje() }
 
-        var porcentajeRestante = 0.0
-        pendientes.forEach { eval ->
-            porcentajeRestante += eval.getPorcentaje()
-        }
+        if (porcRestante == 0.0) return ResultadoProyeccion(calcularPromedioActual(idCurso), 0.0, ptsActuales >= (notaObjetivo * 100.0 / 7.0), "Curso finalizado")
 
-        if (porcentajeRestante == 0.0) {
-            return ResultadoProyeccion(
-                promedioActual = calcularPromedioActual(idCurso),
-                notaNecesaria = 0.0,
-                esAlcanzable = puntosActuales >= (notaObjetivo * 100.0 / 7.0),
-                mensaje = "No hay evaluaciones pendientes"
-            )
-        }
-
-        val puntosObjetivo = (notaObjetivo / 7.0) * 100.0
-        val puntosNecesarios = puntosObjetivo - puntosActuales
-        val notaNecesaria = if (porcentajeRestante > 0) {
-            (puntosNecesarios / porcentajeRestante) * 7.0
-        } else 0.0
-
+        val ptsObjetivo = (notaObjetivo / 7.0) * 100.0
+        val ptsNecesarios = ptsObjetivo - ptsActuales
+        val notaNecesaria = if (porcRestante > 0) (ptsNecesarios / porcRestante) * 7.0 else 0.0
         val esAlcanzable = notaNecesaria <= 7.0
-        val mensaje = when {
-            esAlcanzable && notaNecesaria > 0 ->
-                "Necesitas sacar ${String.format("%.2f", notaNecesaria)} en las evaluaciones restantes"
-            esAlcanzable && notaNecesaria <= 0 ->
-                "¡Ya aprobaste el curso!"
-            else ->
-                "No es posible alcanzar la nota $notaObjetivo"
-        }
+        val mensaje = if (esAlcanzable) "Necesitas un ${String.format("%.1f", notaNecesaria)} en el ${porcRestante.toInt()}% restante" else "Difícil alcanzar un $notaObjetivo"
 
-        return ResultadoProyeccion(
-            promedioActual = calcularPromedioActual(idCurso),
-            notaNecesaria = notaNecesaria,
-            esAlcanzable = esAlcanzable,
-            mensaje = mensaje,
-            porcentajeRestante = porcentajeRestante
-        )
+        return ResultadoProyeccion(calcularPromedioActual(idCurso), notaNecesaria, esAlcanzable, mensaje, porcRestante)
     }
 
     fun agregarEvaluacion(evaluacion: Evaluacion): Boolean {
@@ -86,15 +46,18 @@ class GestorNotas {
         } else false
     }
 
+    // ESTAS DOS FUNCIONES SON CRÍTICAS PARA QUE NO TE DE ERROR
+    fun eliminarEvaluacion(idEvaluacion: String): Boolean {
+        return evaluaciones.remove(idEvaluacion) != null
+    }
+
+    fun obtenerTodasEvaluaciones(): Map<String, Evaluacion> {
+        return evaluaciones.toMap()
+    }
+
     fun obtenerEvaluacionesPorCurso(idCurso: String): List<Evaluacion> {
         return evaluaciones.values.filter { it.getIdCurso() == idCurso }
     }
 }
 
-data class ResultadoProyeccion(
-    val promedioActual: Double,
-    val notaNecesaria: Double,
-    val esAlcanzable: Boolean,
-    val mensaje: String,
-    val porcentajeRestante: Double = 0.0
-)
+data class ResultadoProyeccion(val promedioActual: Double, val notaNecesaria: Double, val esAlcanzable: Boolean, val mensaje: String, val porcentajeRestante: Double = 0.0)

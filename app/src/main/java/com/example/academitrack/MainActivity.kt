@@ -1,18 +1,26 @@
 package com.academitrack.app
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import com.academitrack.app.domain.*
 import com.academitrack.app.services.*
 import com.academitrack.app.ui.*
 import com.academitrack.app.persistence.PersistenciaLocal
-import com.academitrack.app.domain.Semestre
 
 class MainActivity : ComponentActivity() {
 
@@ -26,39 +34,23 @@ class MainActivity : ComponentActivity() {
 
         persistencia = PersistenciaLocal(this)
 
-        // Cargar datos guardados
         val evaluacionesGuardadas = persistencia.cargarEvaluaciones()
-        evaluacionesGuardadas.forEach { (_, eval) ->
-            gestorNotas.agregarEvaluacion(eval)
-        }
-
-        val asistenciasGuardadas = persistencia.cargarAsistencias()
-        gestorAsistencia.cargarAsistencias(asistenciasGuardadas)
-
-        val horariosGuardados = persistencia.cargarHorarios()
-        gestorHorario.cargarClases(horariosGuardados)
+        evaluacionesGuardadas.forEach { (_, eval) -> gestorNotas.agregarEvaluacion(eval) }
+        gestorAsistencia.cargarAsistencias(persistencia.cargarAsistencias())
+        gestorHorario.cargarClases(persistencia.cargarHorarios())
 
         setContent {
-            var modoOscuro by remember {
-                mutableStateOf(persistencia.cargarPreferenciaModoOscuro())
-            }
+            var modoOscuro by remember { mutableStateOf(persistencia.cargarPreferenciaModoOscuro()) }
+            var mostrarSplash by remember { mutableStateOf(true) }
 
             AcademiTrackTheme(darkTheme = modoOscuro) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    AcademiTrackApp(
-                        gestorNotas = gestorNotas,
-                        gestorAsistencia = gestorAsistencia,
-                        gestorHorario = gestorHorario,
-                        persistencia = persistencia,
-                        modoOscuro = modoOscuro,
-                        onCambiarModo = {
-                            modoOscuro = it
-                            persistencia.guardarPreferenciaModoOscuro(it)
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    Crossfade(targetState = mostrarSplash, animationSpec = tween(1000), label = "Splash") { isSplash ->
+                        if (isSplash) SplashScreen { mostrarSplash = false }
+                        else AcademiTrackApp(gestorNotas, gestorAsistencia, gestorHorario, persistencia, modoOscuro) {
+                            modoOscuro = it; persistencia.guardarPreferenciaModoOscuro(it)
                         }
-                    )
+                    }
                 }
             }
         }
@@ -83,279 +75,141 @@ fun AcademiTrackApp(
     var pantallaActual by remember { mutableStateOf("cursos") }
     var cursoSeleccionado by remember { mutableStateOf<Curso?>(null) }
     var semestreSeleccionado by remember { mutableStateOf<Semestre?>(null) }
-
+    val context = LocalContext.current
     val apiKey = "AIzaSyDtpM1m_CHzXefhZ9zYcv3qWe1nnkt7rvo"
 
-    val cursos = remember {
-        mutableStateListOf<Curso>().apply {
-            addAll(persistencia.cargarCursos())
-        }
-    }
+    val cursos = remember { mutableStateListOf<Curso>().apply { addAll(persistencia.cargarCursos()) } }
+    val triggerUpdate = remember { mutableStateOf(0L) }
 
-    // Guardar cursos cuando cambien
-    LaunchedEffect(cursos.size) {
-        if (cursos.isNotEmpty()) {
-            persistencia.guardarCursos(cursos.toList())
-        }
-    }
+    LaunchedEffect(cursos.size) { if (cursos.isNotEmpty()) persistencia.guardarCursos(cursos.toList()) }
 
-    when (pantallaActual) {
-        "cursos" -> {
-            CursosScreen(
-                cursos = cursos.filter { it.estaActivo() },
-                onCursoClick = { curso ->
-                    cursoSeleccionado = curso
-                    pantallaActual = "detalle"
-                },
-                onAgregarCurso = {
-                    pantallaActual = "agregar_curso"
-                },
-                onAjustes = {
-                    pantallaActual = "ajustes"
-                },
-                onVerCalendario = {
-                    pantallaActual = "calendario_mensual"
-                },
-                onVerArchivados = {
-                    pantallaActual = "cursos_archivados"
+    // Pantallas principales donde se muestra la BottomBar
+    val pantallasPrincipales = listOf("cursos", "calendario_mensual", "estadisticas")
+
+    Scaffold(
+        bottomBar = {
+            if (pantallaActual in pantallasPrincipales) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                    NavigationBarItem(
+                        icon = { Icon(if(pantallaActual=="cursos") Icons.Filled.School else Icons.Outlined.School, null) },
+                        label = { Text("Ramos") },
+                        selected = pantallaActual == "cursos",
+                        onClick = { pantallaActual = "cursos" }
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(if(pantallaActual=="calendario_mensual") Icons.Filled.DateRange else Icons.Outlined.DateRange, null) },
+                        label = { Text("Calendario") },
+                        selected = pantallaActual == "calendario_mensual",
+                        onClick = { pantallaActual = "calendario_mensual" }
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(if(pantallaActual=="estadisticas") Icons.Filled.BarChart else Icons.Outlined.BarChart, null) },
+                        label = { Text("Gráficos") },
+                        selected = pantallaActual == "estadisticas",
+                        onClick = { pantallaActual = "estadisticas" }
+                    )
                 }
-            )
-        }
-
-        "cursos_archivados" -> {
-            CursosArchivadosScreen(
-                cursos = cursos.toList(),
-                onVolverClick = { pantallaActual = "cursos" },
-                onCursoClick = { curso ->
-                    cursoSeleccionado = curso
-                    pantallaActual = "detalle_archivado"
-                }
-            )
-        }
-
-        "detalle_archivado" -> {
-            cursoSeleccionado?.let { curso ->
-                DetalleCursoArchivadoScreen(
-                    curso = curso,
-                    gestorNotas = gestorNotas,
-                    gestorAsistencia = gestorAsistencia,
-                    onVolverClick = { pantallaActual = "cursos_archivados" },
-                    onReactivar = { nuevoSemestre ->
-                        curso.reactivar(nuevoSemestre)
-                        val index = cursos.indexOfFirst { it.getId() == curso.getId() }
-                        if (index != -1) {
-                            cursos[index] = curso
-                            persistencia.guardarCursos(cursos.toList())
-                        }
-                        pantallaActual = "cursos"
-                    }
-                )
             }
         }
-
-        "agregar_curso" -> {
-            AgregarCursoScreen(
-                onVolverClick = { pantallaActual = "cursos" },
-                onGuardar = { curso ->
-                    cursos.add(curso)
-                    persistencia.guardarCursos(cursos.toList())
-                    pantallaActual = "cursos"
-                }
-            )
-        }
-
-        "detalle" -> {
-            cursoSeleccionado?.let { curso ->
-                DetalleCursoScreen(
-                    curso = curso,
-                    gestorNotas = gestorNotas,
-                    gestorAsistencia = gestorAsistencia,
-                    onVolverClick = { pantallaActual = "cursos" },
-                    onAgregarNota = { pantallaActual = "agregar_nota" },
-                    onAgregarConIA = { pantallaActual = "camera" },
-                    onVerCalendario = { pantallaActual = "calendario" },
-                    onEditarCurso = { pantallaActual = "editar_curso" },
-                    onEliminarCurso = {
+    ) { paddingValues ->
+        Box(modifier = Modifier.padding(paddingValues)) {
+            when (pantallaActual) {
+                "cursos" -> CursosScreen(
+                    cursos = cursos.filter { it.estaActivo() },
+                    onCursoClick = { curso -> cursoSeleccionado = curso; pantallaActual = "detalle" },
+                    onAgregarCurso = { pantallaActual = "agregar_curso" },
+                    onAjustes = { pantallaActual = "ajustes" },
+                    onVerCalendario = { pantallaActual = "calendario_mensual" }, // Opcional, ya está abajo
+                    onVerArchivados = { pantallaActual = "cursos_archivados" },
+                    onEliminarCurso = { curso ->
+                        gestorHorario.obtenerClasesPorCurso(curso.getId()).forEach { gestorHorario.eliminarClase(it.id) }
                         cursos.remove(curso)
                         persistencia.guardarCursos(cursos.toList())
-                        pantallaActual = "cursos"
-                    },
-                    onArchivarCurso = { pantallaActual = "archivar_curso" }
-                )
-            }
-        }
-
-        "archivar_curso" -> {
-            cursoSeleccionado?.let { curso ->
-                val promedio = gestorNotas.calcularPromedioActual(curso.getId())
-                ArchivarCursoScreen(
-                    curso = curso,
-                    promedioActual = promedio,
-                    onVolverClick = { pantallaActual = "detalle" },
-                    onArchivar = { estado, notaFinal ->
-                        curso.archivar(estado, notaFinal)
-                        val index = cursos.indexOfFirst { it.getId() == curso.getId() }
-                        if (index != -1) {
-                            cursos[index] = curso
-                            persistencia.guardarCursos(cursos.toList())
-                        }
-                        pantallaActual = "cursos"
+                        persistencia.guardarHorarios(gestorHorario.obtenerTodasClases())
+                        Toast.makeText(context, "Curso eliminado", Toast.LENGTH_SHORT).show()
                     }
                 )
-            }
-        }
 
-        "agregar_nota" -> {
-            cursoSeleccionado?.let { curso ->
-                AgregarNotaScreen(
-                    curso = curso,
-                    onVolverClick = { pantallaActual = "detalle" },
-                    onGuardar = { eval: Evaluacion ->
-                        gestorNotas.agregarEvaluacion(eval)
-                        persistencia.guardarEvaluaciones(mapOf(eval.getId() to eval))
-                        pantallaActual = "detalle"
-                    }
+                "calendario_mensual" -> CalendarioMensualScreen(
+                    gestorHorario, gestorAsistencia, cursos.filter { it.estaActivo() },
+                    { pantallaActual = "cursos" }, // Volver (solo si fuera subpantalla)
+                    { pantallaActual = "seleccionar_semestre" }, // Registrar
+                    { gestorHorario.obtenerTodasClases().forEach { gestorHorario.eliminarClase(it.id) }; persistencia.guardarHorarios(emptyList()) }, // Limpiar
+                    { id, f, e -> gestorAsistencia.registrarOActualizar(id, f, e); persistencia.guardarAsistencias(gestorAsistencia.obtenerTodasAsistencias()); Toast.makeText(context, "Estado actualizado", Toast.LENGTH_SHORT).show() }, // Asistencia
+                    { clase -> gestorHorario.eliminarClase(clase.id); persistencia.guardarHorarios(gestorHorario.obtenerTodasClases()) }, // Eliminar clase individual
+                    esPantallaPrincipal = true // Indica que es raíz
                 )
-            }
-        }
 
-        "camera" -> {
-            cursoSeleccionado?.let { curso ->
-                CameraScreen(
-                    curso = curso,
-                    apiKey = apiKey,
-                    onVolverClick = { pantallaActual = "detalle" },
-                    onGuardar = { eval: Evaluacion ->
-                        gestorNotas.agregarEvaluacion(eval)
-                        persistencia.guardarEvaluaciones(mapOf(eval.getId() to eval))
-                        pantallaActual = "detalle"
+                "estadisticas" -> EstadisticasScreen(cursos, gestorNotas, gestorAsistencia)
+
+                // PANTALLAS SECUNDARIAS (Sin barra inferior)
+                "cursos_archivados" -> CursosArchivadosScreen(cursos.toList(), { pantallaActual = "cursos" }) { c -> cursoSeleccionado = c; pantallaActual = "detalle_archivado" }
+                "detalle_archivado" -> cursoSeleccionado?.let { curso ->
+                    DetalleCursoArchivadoScreen(curso, gestorNotas, gestorAsistencia, { pantallaActual = "cursos_archivados" }) {
+                        curso.reactivar(it); val idx = cursos.indexOfFirst { c -> c.getId() == curso.getId() }; if (idx != -1) cursos[idx] = curso; persistencia.guardarCursos(cursos.toList()); pantallaActual = "cursos"
                     }
-                )
-            }
-        }
-
-        "calendario" -> {
-            cursoSeleccionado?.let { curso ->
-                CalendarioAsistenciaScreen(
-                    curso = curso,
-                    gestorAsistencia = gestorAsistencia,
-                    onVolverClick = { pantallaActual = "detalle" },
-                    onRegistrarAsistencia = { fecha: Long, estado: EstadoAsistencia ->
-                        val asist = Asistencia(
-                            idAsistencia = "asist_${System.currentTimeMillis()}",
-                            idCurso = curso.getId(),
-                            fecha = fecha,
-                            estado = estado
-                        )
-                        gestorAsistencia.registrarAsistencia(asist)
-                        persistencia.guardarAsistencias(gestorAsistencia.obtenerTodasAsistencias())
-                    }
-                )
-            }
-        }
-
-        "editar_curso" -> {
-            cursoSeleccionado?.let { curso ->
-                EditarCursoScreen(
-                    curso = curso,
-                    onVolverClick = { pantallaActual = "detalle" },
-                    onGuardar = { cursoEditado ->
-                        val index = cursos.indexOfFirst { it.getId() == curso.getId() }
-                        if (index != -1) {
-                            cursos[index] = cursoEditado
-                            cursoSeleccionado = cursoEditado
-                            persistencia.guardarCursos(cursos.toList())
-                        }
-                        pantallaActual = "detalle"
-                    }
-                )
-            }
-        }
-
-        "ajustes" -> {
-            AjustesScreen(
-                modoOscuro = modoOscuro,
-                onCambiarModo = onCambiarModo,
-                onVolverClick = { pantallaActual = "cursos" },
-                onConfigNotificaciones = { pantallaActual = "notificaciones" }
-            )
-        }
-
-        "notificaciones" -> {
-            ConfigurarNotificacionesScreen(
-                cursos = cursos.filter { it.estaActivo() },
-                onVolverClick = { pantallaActual = "ajustes" },
-                persistencia = persistencia
-            )
-        }
-
-        "calendario_mensual" -> {
-            CalendarioMensualScreen(
-                gestorHorario = gestorHorario,
-                gestorAsistencia = gestorAsistencia,
-                cursos = cursos.filter { it.estaActivo() },
-                onVolverClick = { pantallaActual = "cursos" },
-                onRegistrarHorario = { pantallaActual = "seleccionar_semestre" },
-                onVerHorarioSemanal = { pantallaActual = "horario_semanal" },
-                onLimpiarHorario = {
-                    // Limpiar todas las clases
-                    gestorHorario.obtenerTodasClases().forEach { clase ->
-                        gestorHorario.eliminarClase(clase.id)
-                    }
-                    // Guardar cambios
-                    persistencia.guardarHorarios(emptyList())
                 }
-            )
-        }
-
-        "horario_semanal" -> {
-            HorarioSemanalScreen(
-                gestorHorario = gestorHorario,
-                onVolverClick = { pantallaActual = "calendario_mensual" },
-                onRegistrarHorario = { pantallaActual = "seleccionar_semestre" },
-                onEliminarClase = { clase ->
-                    // Eliminar la clase del gestor
-                    gestorHorario.eliminarClase(clase.id)
-
-                    // Guardar cambios en persistencia
+                "agregar_curso" -> AgregarCursoScreen({ pantallaActual = "cursos" }) { c, h ->
+                    cursos.add(c)
+                    h.forEach { gestorHorario.agregarClase(it) }
+                    persistencia.guardarCursos(cursos.toList())
                     persistencia.guardarHorarios(gestorHorario.obtenerTodasClases())
+                    pantallaActual = "cursos"
                 }
-            )
-        }
-
-        "seleccionar_semestre" -> {
-            SeleccionarSemestreScreen(
-                onVolverClick = { pantallaActual = "horario_semanal" },
-                onSemestreSeleccionado = { semestre ->
-                    semestreSeleccionado = semestre
-                    pantallaActual = "registrar_horario"
+                "detalle" -> cursoSeleccionado?.let { curso ->
+                    key(triggerUpdate.value) {
+                        DetalleCursoScreen(
+                            curso, gestorNotas, gestorAsistencia, { pantallaActual = "cursos" }, { pantallaActual = "agregar_nota" }, { pantallaActual = "camera" },
+                            { pantallaActual = "calendario" }, // Ir al calendario individual
+                            { pantallaActual = "editar_curso" },
+                            { gestorHorario.obtenerClasesPorCurso(curso.getId()).forEach { gestorHorario.eliminarClase(it.id) }; cursos.remove(curso); persistencia.guardarCursos(cursos.toList()); persistencia.guardarHorarios(gestorHorario.obtenerTodasClases()); pantallaActual = "cursos" },
+                            { pantallaActual = "archivar_curso" },
+                            { eval -> gestorNotas.eliminarEvaluacion(eval.getId()); curso.eliminarEvaluacion(eval.getId()); persistencia.guardarEvaluaciones(gestorNotas.obtenerTodasEvaluaciones()); persistencia.guardarCursos(cursos.toList()); triggerUpdate.value = System.currentTimeMillis(); Toast.makeText(context, "Nota eliminada", Toast.LENGTH_SHORT).show() },
+                            { nuevoColor -> curso.setColor(nuevoColor); val idx = cursos.indexOfFirst { it.getId() == curso.getId() }; if (idx != -1) cursos[idx] = curso; persistencia.guardarCursos(cursos.toList()); triggerUpdate.value = System.currentTimeMillis() }
+                        )
+                    }
                 }
-            )
-        }
-
-        "registrar_horario" -> {
-            semestreSeleccionado?.let { semestre ->
-                RegistrarHorarioScreen(
-                    apiKey = apiKey,
-                    cursos = cursos.filter { it.estaActivo() },
-                    semestre = semestre,
-                    onVolverClick = { pantallaActual = "seleccionar_semestre" },
-                    onGuardarHorario = { resultado ->
-                        // Agregar cursos nuevos
-                        resultado.cursosNuevos.forEach { nuevoCurso ->
-                            cursos.add(nuevoCurso)
+                "agregar_nota" -> cursoSeleccionado?.let { curso ->
+                    val disp = 100.0 - gestorNotas.calcularPorcentajeTotal(curso.getId())
+                    AgregarNotaScreen(curso, disp, { pantallaActual = "detalle" }) { eval -> gestorNotas.agregarEvaluacion(eval); curso.agregarEvaluacion(eval.getId()); persistencia.guardarEvaluaciones(mapOf(eval.getId() to eval)); persistencia.guardarEvaluaciones(gestorNotas.obtenerTodasEvaluaciones()); persistencia.guardarCursos(cursos.toList()); pantallaActual = "detalle" }
+                }
+                "camera" -> cursoSeleccionado?.let { curso ->
+                    CameraScreen(curso, apiKey, { pantallaActual = "detalle" }) { eval -> gestorNotas.agregarEvaluacion(eval); curso.agregarEvaluacion(eval.getId()); persistencia.guardarEvaluaciones(gestorNotas.obtenerTodasEvaluaciones()); persistencia.guardarCursos(cursos.toList()); pantallaActual = "detalle" }
+                }
+                "archivar_curso" -> cursoSeleccionado?.let { curso ->
+                    val prom = gestorNotas.calcularPromedioActual(curso.getId())
+                    ArchivarCursoScreen(curso, prom, { pantallaActual = "detalle" }) { est, n -> curso.archivar(est, n); val idx = cursos.indexOfFirst { it.getId() == curso.getId() }; if (idx != -1) cursos[idx] = curso; persistencia.guardarCursos(cursos.toList()); pantallaActual = "cursos" }
+                }
+                "calendario" -> cursoSeleccionado?.let { curso ->
+                    CalendarioAsistenciaScreen(curso, gestorAsistencia, { pantallaActual = "detalle" }) { f, e -> gestorAsistencia.registrarOActualizar(curso.getId(), f, e); persistencia.guardarAsistencias(gestorAsistencia.obtenerTodasAsistencias()) }
+                }
+                "editar_curso" -> cursoSeleccionado?.let { curso ->
+                    val horarios = gestorHorario.obtenerClasesPorCurso(curso.getId())
+                    EditarCursoScreen(curso, horarios, { pantallaActual = "detalle" }) { edit, nuevosHorarios ->
+                        val idx = cursos.indexOfFirst { it.getId() == curso.getId() }
+                        if (idx != -1) {
+                            cursos[idx] = edit
+                            cursoSeleccionado = edit
+                            horarios.forEach { gestorHorario.eliminarClase(it.id) }
+                            nuevosHorarios.forEach { gestorHorario.agregarClase(it) }
+                            persistencia.guardarCursos(cursos.toList())
+                            persistencia.guardarHorarios(gestorHorario.obtenerTodasClases())
                         }
-
-                        // Agregar clases al horario
-                        resultado.clases.forEach { gestorHorario.agregarClase(it) }
-
-                        // Guardar todo
+                        pantallaActual = "detalle"
+                    }
+                }
+                "ajustes" -> AjustesScreen(modoOscuro, onCambiarModo, { pantallaActual = "cursos" }, { pantallaActual = "notificaciones" })
+                "notificaciones" -> ConfigurarNotificacionesScreen(cursos.filter { it.estaActivo() }, { pantallaActual = "ajustes" }, persistencia)
+                "seleccionar_semestre" -> SeleccionarSemestreScreen({ pantallaActual = "calendario_mensual" }) { s -> semestreSeleccionado = s; pantallaActual = "registrar_horario" }
+                "registrar_horario" -> semestreSeleccionado?.let { sem ->
+                    RegistrarHorarioScreen(apiKey, cursos.filter { it.estaActivo() }, sem, { pantallaActual = "seleccionar_semestre" }) { res ->
+                        res.cursosNuevos.forEach { cursos.add(it) }
+                        res.clases.forEach { gestorHorario.agregarClase(it) }
                         persistencia.guardarCursos(cursos.toList())
                         persistencia.guardarHorarios(gestorHorario.obtenerTodasClases())
-
-                        pantallaActual = "horario_semanal"
+                        pantallaActual = "calendario_mensual"
                     }
-                )
+                }
             }
         }
     }
@@ -366,29 +220,24 @@ fun AcademiTrackTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) {
-        darkColorScheme(
-            primary = androidx.compose.ui.graphics.Color(0xFF6200EE),
-            secondary = androidx.compose.ui.graphics.Color(0xFF03DAC6),
-            tertiary = androidx.compose.ui.graphics.Color(0xFF3700B3),
-            background = androidx.compose.ui.graphics.Color(0xFF121212),
-            surface = androidx.compose.ui.graphics.Color(0xFF1E1E1E),
-            error = androidx.compose.ui.graphics.Color(0xFFCF6679)
-        )
-    } else {
-        lightColorScheme(
-            primary = androidx.compose.ui.graphics.Color(0xFF6200EE),
-            secondary = androidx.compose.ui.graphics.Color(0xFF03DAC6),
-            tertiary = androidx.compose.ui.graphics.Color(0xFF3700B3),
-            background = androidx.compose.ui.graphics.Color(0xFFFFFBFE),
-            surface = androidx.compose.ui.graphics.Color(0xFFFFFBFE),
-            error = androidx.compose.ui.graphics.Color(0xFFB00020)
-        )
-    }
-
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography(),
-        content = content
+    val lightColors = lightColorScheme(
+        primary = Color(0xFF4F46E5), onPrimary = Color.White,
+        primaryContainer = Color(0xFFE0E7FF), onPrimaryContainer = Color(0xFF312E81),
+        secondary = Color(0xFF10B981), onSecondary = Color.White,
+        secondaryContainer = Color(0xFFD1FAE5), onSecondaryContainer = Color(0xFF065F46),
+        tertiary = Color(0xFFF59E0B), background = Color(0xFFF8FAFC),
+        surface = Color.White, onSurface = Color(0xFF1E293B),
+        surfaceVariant = Color(0xFFF1F5F9), onSurfaceVariant = Color(0xFF64748B),
+        error = Color(0xFFEF4444), errorContainer = Color(0xFFFEE2E2)
     )
+    val darkColors = darkColorScheme(
+        primary = Color(0xFF818CF8), onPrimary = Color(0xFF312E81),
+        primaryContainer = Color(0xFF3730A3), onPrimaryContainer = Color(0xFFE0E7FF),
+        secondary = Color(0xFF34D399), onSecondary = Color(0xFF064E3B),
+        tertiary = Color(0xFFFBBF24), background = Color(0xFF0F172A),
+        surface = Color(0xFF1E293B), onSurface = Color(0xFFF1F5F9),
+        surfaceVariant = Color(0xFF334155), onSurfaceVariant = Color(0xFF94A3B8),
+        error = Color(0xFFF87171)
+    )
+    MaterialTheme(colorScheme = if (darkTheme) darkColors else lightColors, typography = Typography(), content = content)
 }
