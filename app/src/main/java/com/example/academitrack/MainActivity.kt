@@ -33,9 +33,7 @@ class MainActivity : ComponentActivity() {
     // 🔑 MULTI-API-KEY: Agrega todas las API Keys que quieras
     // Crea más en: https://aistudio.google.com/app/apikey
     private val apiKeys = listOf( // Tu API Key actual
-        "AIzaSyB7kE-ndmEj3n_F-_UABP-IodOr1JmOR6s",                 // API Key 2 (crea otra cuenta Gmail)
-        "AIzaSyD5YXF85rGwr9tN1aSnBIIWEfZ-KzrwIOo",                 // API Key 3
-        "AIzaSyB4SY7pZENSoT_brMB0ATDsvmTrDKKTKpc"                   // API Key 4
+        "AIzaSyA9eOAua2Fh5GuEoMD2G618dJNuKrEz-24"                  // API Key 4
     )
     init {
         if (apiKeys.size == 1) {

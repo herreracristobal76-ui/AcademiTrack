@@ -17,23 +17,23 @@ import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
 /**
- * VERSIÓN OPTIMIZADA - Maneja Rate Limits (429) automáticamente
+ * 🚀 VERSIÓN OPTIMIZADA - Usa modelos más rápidos y precisos
  */
 class HorarioIAService(private val apiKey: String) {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(90, TimeUnit.SECONDS)  // ⬆️ Aumentado
-        .readTimeout(90, TimeUnit.SECONDS)     // ⬆️ Aumentado
-        .writeTimeout(90, TimeUnit.SECONDS)    // ⬆️ Aumentado
+        .connectTimeout(90, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
+        .writeTimeout(90, TimeUnit.SECONDS)
         .build()
 
     companion object {
         private const val TAG = "HorarioIA"
-        private const val MAX_IMAGE_SIZE = 800  // ⬇️ Reducido para enviar menos datos
-        private const val JPEG_QUALITY = 70     // ⬇️ Reducido para comprimir más
+        private const val MAX_IMAGE_SIZE = 1200  // ⬆️ AUMENTADO: Mejor calidad
+        private const val JPEG_QUALITY = 85      // ⬆️ AUMENTADO: Mejor reconocimiento
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-        private const val MAX_REINTENTOS = 3     // 🔄 Máximo de reintentos
-        private const val DELAY_BASE_MS = 5000L  // ⏱️ 5 segundos entre reintentos
+        private const val MAX_REINTENTOS = 3
+        private const val DELAY_BASE_MS = 5000L
     }
 
     suspend fun procesarImagenHorario(
@@ -62,7 +62,7 @@ class HorarioIAService(private val apiKey: String) {
                     "cursos": [
                         {
                             "nombre": "Nombre Curso",
-                            "codigo": "COD-123",
+                            "codigo": "INF-123",
                             "clases": [
                                 {
                                     "sala": "A-201",
@@ -82,20 +82,18 @@ class HorarioIAService(private val apiKey: String) {
                 • Si no ves el código, inventa uno como "CURSO-001"
             """.trimIndent()
 
-            // 🎯 ESTRATEGIA: Probar modelos en orden de éxito conocido
+            // 🎯 MODELOS OPTIMIZADOS: Los 3 mejores en orden
             val modelos = listOf(
-                "gemini-1.5-flash-8b",      // ⚡ MÁS RÁPIDO = Menos rate limit
-                "gemini-1.5-flash",         // ✅ Más confiable
-                "gemini-2.0-flash-exp",     // 🆕 Experimental pero potente
-                "gemini-1.5-pro"            // 💪 Último recurso (más lento)
+                "gemini-2.5-flash",      // ⚡ MÁS RÁPIDO Y PRECISO
+                "gemini-flash-latest",   // 🔄 SIEMPRE ACTUALIZADO
+                "gemini-2.0-flash-001"   // 💪 ESTABLE Y CONFIABLE
             )
 
-            Log.d(TAG, "🎯 Estrategia: Probar ${modelos.size} modelos con reintentos inteligentes")
+            Log.d(TAG, "🎯 Estrategia: Probar ${modelos.size} modelos optimizados")
 
             for ((index, modelo) in modelos.withIndex()) {
-                // ⏱️ Agregar delay entre modelos para evitar rate limit
                 if (index > 0) {
-                    val delayMs = 2000L // 2 segundos entre cambios de modelo
+                    val delayMs = 2000L
                     Log.d(TAG, "⏳ Esperando ${delayMs/1000}s antes de probar siguiente modelo...")
                     delay(delayMs)
                 }
@@ -103,7 +101,6 @@ class HorarioIAService(private val apiKey: String) {
                 try {
                     Log.d(TAG, "📡 [${index + 1}/${modelos.size}] Intentando: $modelo")
 
-                    // 🔄 Intentar con reintentos automáticos
                     val resultado = intentarConReintentos(
                         modelo = modelo,
                         imagenBase64 = imagenOptimizada,
@@ -121,26 +118,24 @@ class HorarioIAService(private val apiKey: String) {
                     when {
                         e.message?.contains("429") == true -> {
                             Log.w(TAG, "⏱️ Rate limit alcanzado. Probando siguiente modelo...")
-                            continue // Probar siguiente modelo
+                            continue
                         }
                         e.message?.contains("403") == true -> {
                             Log.w(TAG, "🔒 Sin acceso a $modelo. Probando siguiente...")
                             continue
                         }
                         e.message?.contains("404") == true -> {
-                            continue // Modelo no existe
+                            continue
                         }
                         else -> {
-                            // Error grave, esperar y continuar
                             Log.e(TAG, "❌ Error grave: ${e.message}")
-                            delay(3000) // Esperar 3 segundos
+                            delay(3000)
                             continue
                         }
                     }
                 }
             }
 
-            // Si llegamos aquí, ningún modelo funcionó
             throw Exception("""
                 ⏱️ LÍMITE DE SOLICITUDES ALCANZADO
                 
@@ -180,9 +175,6 @@ class HorarioIAService(private val apiKey: String) {
         }
     }
 
-    /**
-     * 🔄 Intenta llamar a la API con reintentos automáticos en caso de rate limit
-     */
     private suspend fun intentarConReintentos(
         modelo: String,
         imagenBase64: String,
@@ -196,14 +188,12 @@ class HorarioIAService(private val apiKey: String) {
         } catch (e: Exception) {
             when {
                 e.message?.contains("429") == true && intentoActual < MAX_REINTENTOS -> {
-                    // Rate limit: esperar con backoff exponencial
                     val delayMs = DELAY_BASE_MS * intentoActual
                     Log.w(TAG, "⏱️ Rate limit. Reintento $intentoActual/$MAX_REINTENTOS en ${delayMs/1000}s...")
                     delay(delayMs)
                     intentarConReintentos(modelo, imagenBase64, prompt, cursosExistentes, semestre, intentoActual + 1)
                 }
                 e.message?.contains("500") == true || e.message?.contains("503") == true -> {
-                    // Error del servidor: reintentar una vez
                     if (intentoActual == 1) {
                         Log.w(TAG, "🔄 Error del servidor. Reintentando en 3s...")
                         delay(3000)
@@ -241,10 +231,10 @@ class HorarioIAService(private val apiKey: String) {
                 })
             })
             put("generationConfig", JSONObject().apply {
-                put("temperature", 0.1)
-                put("topK", 10)
-                put("topP", 0.5)
-                put("maxOutputTokens", 2048) // ⬇️ Reducido para respuestas más rápidas
+                put("temperature", 0.1)        // ⬇️ Más preciso
+                put("topK", 10)                // ⬇️ Más enfocado
+                put("topP", 0.5)               // ⬇️ Más determinista
+                put("maxOutputTokens", 2048)   // ✅ Suficiente
             })
             put("safetySettings", JSONArray().apply {
                 listOf(
@@ -272,7 +262,6 @@ class HorarioIAService(private val apiKey: String) {
         if (!response.isSuccessful) {
             val errorMsg = when (response.code) {
                 429 -> {
-                    // Extraer tiempo de espera si está disponible
                     val retryAfter = response.header("Retry-After")?.toLongOrNull() ?: 60
                     "Rate limit alcanzado. Espera ${retryAfter}s"
                 }
@@ -406,7 +395,7 @@ class HorarioIAService(private val apiKey: String) {
 
             if (bitmap == null) return imagenBase64
 
-            // 🎯 Optimización agresiva para reducir tamaño y velocidad
+            // 🎯 Optimización MEJORADA: Balance entre calidad y tamaño
             val maxDimension = MAX_IMAGE_SIZE
             val needsResize = bitmap.width > maxDimension || bitmap.height > maxDimension
 
@@ -419,7 +408,7 @@ class HorarioIAService(private val apiKey: String) {
                     bitmap,
                     (bitmap.width * ratio).toInt(),
                     (bitmap.height * ratio).toInt(),
-                    true
+                    true  // ⬆️ CAMBIO: true = filtro de alta calidad
                 )
             } else {
                 bitmap

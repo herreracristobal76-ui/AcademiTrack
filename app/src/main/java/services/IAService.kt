@@ -56,12 +56,10 @@ class IAService(private val apiKey: String) {
 
             // Modelos compatibles con tu cuenta (en orden de preferencia)
             val modelos = listOf(
-                "gemini-2.5-flash",           // ⭐ Mejor opción - Rápido y preciso
-                "gemini-flash-latest",        // ⭐ Siempre apunta al más reciente
-                "gemini-2.0-flash",           // ✅ Alternativa confiable
-                "gemini-2.5-pro",             // 💪 Más potente (más lento)
-                "gemini-pro-latest",          // 💪 Pro más reciente
-                "gemini-2.0-flash-exp"        // 🧪 Experimental
+                "gemini-2.5-flash",           // ⭐ Mejor opción
+                "gemini-flash-latest",        // ⭐ Siempre actualizado
+                "gemini-2.0-flash-001",       // ✅ Alternativa confiable
+                "gemini-2.5-pro"              // 💪 Último recurso
             )
 
             Log.d(TAG, "📋 Probando ${modelos.size} modelos compatibles...")
