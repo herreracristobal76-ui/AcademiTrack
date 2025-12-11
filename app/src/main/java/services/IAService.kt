@@ -12,93 +12,134 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
+/**
+ * VERSIÓN FINAL - Compatible con Gemini 2.0, 2.5 y 3.0
+ * Actualizado: Diciembre 2024
+ */
 class IAService(private val apiKey: String) {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
     companion object {
         private const val TAG = "IAService"
+        private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
     }
 
     suspend fun procesarImagenNota(imagenBase64: String): ResultadoIA = withContext(Dispatchers.IO) {
         try {
+            Log.d(TAG, "🔍 Iniciando procesamiento con Gemini 2.x/3.x")
+
             val prompt = """
-                Analiza esta imagen que contiene información de una evaluación académica (nota, certamen, taller, examen).
+                Eres un asistente que analiza imágenes de evaluaciones académicas chilenas.
                 
-                Extrae la siguiente información y devuélvela SOLO en formato JSON sin texto adicional:
+                Analiza esta imagen y extrae:
+                1. Nombre de la evaluación (ej: "Certamen 1", "Taller 2")
+                2. Nota obtenida (escala chilena 1.0 a 7.0)
+                3. Porcentaje que vale del curso (0-100)
+                4. Fecha si está visible
+                
+                IMPORTANTE: Responde SOLO con JSON, sin texto adicional ni markdown:
                 {
-                    "nombre_evaluacion": "nombre de la evaluación",
-                    "nota": número de 1.0 a 7.0,
-                    "porcentaje": porcentaje del total del curso (0-100),
-                    "fecha": "fecha en formato dd/mm/yyyy si está visible",
-                    "observaciones": "cualquier información relevante",
-                    "confianza": tu nivel de confianza en los datos extraídos (0-100)
+                    "nombre_evaluacion": "texto",
+                    "nota": 5.5,
+                    "porcentaje": 30,
+                    "fecha": "dd/mm/yyyy",
+                    "confianza": 85
                 }
                 
-                Si no puedes identificar algún campo, usa null.
-                IMPORTANTE: Responde SOLO con el JSON, sin markdown ni texto adicional.
+                Si no encuentras un dato, usa null.
             """.trimIndent()
 
-            val response = llamarGeminiAPI(imagenBase64, prompt)
-            parsearRespuestaIA(response)
+            // Modelos compatibles con tu cuenta (en orden de preferencia)
+            val modelos = listOf(
+                "gemini-2.5-flash",           // ⭐ Mejor opción - Rápido y preciso
+                "gemini-flash-latest",        // ⭐ Siempre apunta al más reciente
+                "gemini-2.0-flash",           // ✅ Alternativa confiable
+                "gemini-2.5-pro",             // 💪 Más potente (más lento)
+                "gemini-pro-latest",          // 💪 Pro más reciente
+                "gemini-2.0-flash-exp"        // 🧪 Experimental
+            )
+
+            Log.d(TAG, "📋 Probando ${modelos.size} modelos compatibles...")
+
+            for ((index, modelo) in modelos.withIndex()) {
+                try {
+                    Log.d(TAG, "📡 [${index + 1}/${modelos.size}] Intentando: $modelo")
+                    val resultado = llamarGeminiAPI(modelo, imagenBase64, prompt)
+                    Log.d(TAG, "✅ ¡ÉXITO! Funcionó con: $modelo")
+                    return@withContext resultado
+                } catch (e: Exception) {
+                    Log.w(TAG, "⚠️ [$modelo] falló: ${e.message}")
+
+                    // Si no es 404, es un error más grave
+                    if (!e.message.orEmpty().contains("404")) {
+                        // Si es 403 o 429, no tiene sentido seguir probando
+                        if (e.message?.contains("403") == true ||
+                            e.message?.contains("429") == true) {
+                            throw e
+                        }
+                    }
+                }
+            }
+
+            // Si llegamos aquí, ningún modelo funcionó
+            throw Exception("""
+                ❌ No se pudo procesar la imagen
+                
+                Ninguno de los ${modelos.size} modelos disponibles respondió.
+                
+                POSIBLES CAUSAS:
+                
+                1️⃣ Cuota agotada:
+                   • Ve a: https://aistudio.google.com/
+                   • Verifica tus solicitudes disponibles
+                   • El plan gratuito tiene límites
+                
+                2️⃣ Imagen muy grande:
+                   • Intenta con una foto más pequeña
+                   • O usa una imagen más clara
+                
+                3️⃣ Conexión:
+                   • Verifica tu WiFi/datos
+                   • Intenta en 1 minuto
+                
+                💡 TIP: Si sigues con problemas, intenta:
+                   • Reiniciar la app
+                   • Cambiar de red WiFi
+                   • Esperar unos minutos
+            """.trimIndent())
 
         } catch (e: Exception) {
-            Log.e(TAG, "Error procesando imagen", e)
-            e.printStackTrace()
+            Log.e(TAG, "❌ Error fatal", e)
             ResultadoIA(
                 exito = false,
                 nombreEvaluacion = null,
                 nota = null,
                 porcentaje = null,
                 confianza = 0.0,
-                mensaje = "Error: ${e.message}"
+                mensaje = e.message ?: "Error desconocido"
             )
         }
     }
 
-    private fun llamarGeminiAPI(imagenBase64: String, prompt: String): String {
-        // Intentar con diferentes versiones del modelo
-        val modelos = listOf(
-            "gemini-1.5-flash-latest",
-            "gemini-1.5-flash",
-            "gemini-pro-vision"
-        )
+    private fun llamarGeminiAPI(
+        modelo: String,
+        imagenBase64: String,
+        prompt: String
+    ): ResultadoIA {
+        val url = "$BASE_URL/models/$modelo:generateContent?key=$apiKey"
 
-        var ultimoError = ""
-
-        for (modelo in modelos) {
-            try {
-                val url = "https://generativelanguage.googleapis.com/v1beta/models/$modelo:generateContent?key=$apiKey"
-                Log.d(TAG, "Intentando con modelo: $modelo")
-                return intentarLlamadaAPI(url, imagenBase64, prompt)
-            } catch (e: Exception) {
-                ultimoError = e.message ?: "Error desconocido"
-                Log.w(TAG, "Falló modelo $modelo: $ultimoError")
-
-                // Si es un error 404, continuar con el siguiente modelo
-                if (ultimoError.contains("404")) continue
-                // Si es otro error, lanzarlo inmediatamente
-                else throw e
-            }
-        }
-
-        throw Exception("Ningún modelo funcionó. Último error: $ultimoError\n\n" +
-                "Verifica tu API Key en: https://aistudio.google.com/app/apikey")
-    }
-
-    private fun intentarLlamadaAPI(url: String, imagenBase64: String, prompt: String): String {
         val requestBody = JSONObject().apply {
             put("contents", JSONArray().apply {
                 put(JSONObject().apply {
                     put("parts", JSONArray().apply {
-                        // Parte de texto
                         put(JSONObject().apply {
                             put("text", prompt)
                         })
-                        // Parte de imagen
                         put(JSONObject().apply {
                             put("inline_data", JSONObject().apply {
                                 put("mime_type", "image/jpeg")
@@ -109,77 +150,73 @@ class IAService(private val apiKey: String) {
                 })
             })
             put("generationConfig", JSONObject().apply {
-                put("temperature", 0.4)
-                put("topK", 32)
-                put("topP", 1)
+                put("temperature", 0.2)
+                put("topK", 20)
+                put("topP", 0.8)
                 put("maxOutputTokens", 2048)
             })
             put("safetySettings", JSONArray().apply {
-                put(JSONObject().apply {
-                    put("category", "HARM_CATEGORY_HARASSMENT")
-                    put("threshold", "BLOCK_NONE")
-                })
-                put(JSONObject().apply {
-                    put("category", "HARM_CATEGORY_HATE_SPEECH")
-                    put("threshold", "BLOCK_NONE")
-                })
-                put(JSONObject().apply {
-                    put("category", "HARM_CATEGORY_SEXUALLY_EXPLICIT")
-                    put("threshold", "BLOCK_NONE")
-                })
-                put(JSONObject().apply {
-                    put("category", "HARM_CATEGORY_DANGEROUS_CONTENT")
-                    put("threshold", "BLOCK_NONE")
-                })
+                listOf(
+                    "HARM_CATEGORY_HARASSMENT",
+                    "HARM_CATEGORY_HATE_SPEECH",
+                    "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "HARM_CATEGORY_DANGEROUS_CONTENT"
+                ).forEach { category ->
+                    put(JSONObject().apply {
+                        put("category", category)
+                        put("threshold", "BLOCK_NONE")
+                    })
+                }
             })
-        }.toString()
-
-        Log.d(TAG, "Request body size: ${requestBody.length} characters")
+        }
 
         val request = Request.Builder()
             .url(url)
-            .post(requestBody.toRequestBody("application/json".toMediaType()))
-            .addHeader("Content-Type", "application/json")
+            .post(requestBody.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
         val response = client.newCall(request).execute()
         val responseBody = response.body?.string()
 
-        Log.d(TAG, "Response code: ${response.code}")
-        if (responseBody != null) {
-            Log.d(TAG, "Response body: ${responseBody.take(500)}")
-        }
-
         if (!response.isSuccessful) {
-            throw Exception("API Error: ${response.code} - ${response.message}\nBody: $responseBody")
-        }
-
-        return responseBody ?: throw Exception("Respuesta vacía")
-    }
-
-    private fun parsearRespuestaIA(response: String): ResultadoIA {
-        try {
-            val jsonResponse = JSONObject(response)
-
-            // Verificar si hay error en la respuesta
-            if (jsonResponse.has("error")) {
-                val error = jsonResponse.getJSONObject("error")
-                throw Exception("API Error: ${error.getString("message")}")
+            val errorMsg = when (response.code) {
+                400 -> "❌ Imagen inválida (400)\n\nLa imagen podría ser muy grande o corrupta."
+                401 -> "❌ API Key inválida (401)\n\nVerifica tu API Key en MainActivity.kt"
+                403 -> "❌ Sin permisos (403)\n\nTu API Key no tiene acceso a este modelo."
+                404 -> "❌ Modelo no existe (404)\n\nEste modelo fue eliminado o renombrado."
+                429 -> "❌ Límite alcanzado (429)\n\nEspera 1 minuto e intenta de nuevo."
+                500, 503 -> "❌ Error del servidor (${response.code})\n\nIntenta en unos minutos."
+                else -> "❌ Error HTTP ${response.code}"
             }
 
-            // Gemini devuelve la respuesta en candidates[0].content.parts[0].text
+            Log.e(TAG, "Error: $responseBody")
+            throw Exception(errorMsg)
+        }
+
+        return parsearRespuesta(responseBody ?: "")
+    }
+
+    private fun parsearRespuesta(responseBody: String): ResultadoIA {
+        try {
+            val jsonResponse = JSONObject(responseBody)
+
+            if (jsonResponse.has("error")) {
+                val error = jsonResponse.getJSONObject("error")
+                throw Exception("API Error: ${error.optString("message", "Error desconocido")}")
+            }
+
             val candidates = jsonResponse.getJSONArray("candidates")
             if (candidates.length() == 0) {
-                throw Exception("No se recibieron candidatos en la respuesta")
+                throw Exception("La API no generó respuesta.\n\nPosible bloqueo por filtros de seguridad.")
             }
 
             val content = candidates.getJSONObject(0).getJSONObject("content")
             val parts = content.getJSONArray("parts")
             val textoRespuesta = parts.getJSONObject(0).getString("text")
 
-            Log.d(TAG, "Texto respuesta IA: $textoRespuesta")
+            Log.d(TAG, "📝 Respuesta IA (primeros 200 chars): ${textoRespuesta.take(200)}")
 
-            // Limpiar el texto de markdown si existe
+            // Limpiar markdown si existe
             val jsonLimpio = textoRespuesta
                 .replace("```json", "")
                 .replace("```", "")
@@ -189,26 +226,21 @@ class IAService(private val apiKey: String) {
 
             return ResultadoIA(
                 exito = true,
-                nombreEvaluacion = datos.optString("nombre_evaluacion").takeIf { it.isNotEmpty() && it != "null" },
+                nombreEvaluacion = datos.optString("nombre_evaluacion").takeIf {
+                    it.isNotEmpty() && it != "null"
+                },
                 nota = datos.optDouble("nota").takeIf { !it.isNaN() },
                 porcentaje = datos.optDouble("porcentaje").takeIf { !it.isNaN() },
-                fecha = datos.optString("fecha").takeIf { it.isNotEmpty() && it != "null" },
-                observaciones = datos.optString("observaciones").takeIf { it.isNotEmpty() && it != "null" },
-                confianza = datos.optDouble("confianza", 80.0),
-                mensaje = "Datos extraídos correctamente"
+                fecha = datos.optString("fecha").takeIf {
+                    it.isNotEmpty() && it != "null"
+                },
+                confianza = datos.optDouble("confianza", 75.0),
+                mensaje = "✅ Datos extraídos correctamente"
             )
 
         } catch (e: Exception) {
             Log.e(TAG, "Error parseando respuesta", e)
-            e.printStackTrace()
-            return ResultadoIA(
-                exito = false,
-                nombreEvaluacion = null,
-                nota = null,
-                porcentaje = null,
-                confianza = 0.0,
-                mensaje = "Error al parsear respuesta: ${e.message}"
-            )
+            throw Exception("❌ Error al interpretar respuesta:\n\n${e.message}")
         }
     }
 
