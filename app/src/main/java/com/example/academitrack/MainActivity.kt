@@ -192,7 +192,7 @@ fun AcademiTrackApp(
                     curso = curso,
                     promedioActual = promedio,
                     onVolverClick = { pantallaActual = "detalle" },
-                    onArchivar = {estado, notaFinal ->
+                    onArchivar = { estado, notaFinal ->
                         curso.archivar(estado, notaFinal)
                         val index = cursos.indexOfFirst { it.getId() == curso.getId() }
                         if (index != -1) {
@@ -344,16 +344,6 @@ fun AcademiTrackApp(
             }
         }
     }
-}
-
-@Composable
-fun ArchivarCursoScreen(
-    curso: Curso,
-    promedioActual: Double,
-    onVolverClick: () -> Unit,
-    onArchivar: (ERROR, ERROR) -> Unit
-) {
-    TODO("Not yet implemented")
 }
 
 @Composable
