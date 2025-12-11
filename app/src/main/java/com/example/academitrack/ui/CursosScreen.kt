@@ -7,8 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,18 +22,22 @@ fun CursosScreen(
     onCursoClick: (Curso) -> Unit,
     onAgregarCurso: () -> Unit,
     onAjustes: () -> Unit,
-    onVerCalendario: () -> Unit
+    onVerCalendario: () -> Unit,
+    onVerArchivados: () -> Unit
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Mis Cursos") },
                 actions = {
+                    IconButton(onClick = onVerArchivados) {
+                        Icon(Icons.Default.Archive, "Cursos Archivados")
+                    }
                     IconButton(onClick = onAjustes) {
                         Icon(Icons.Default.Settings, "Ajustes")
                     }
                     IconButton(onClick = onVerCalendario) {
-                        Icon(Icons.Filled.CalendarMonth, "Ver Calendario Mensual")
+                        Icon(Icons.Filled.CalendarMonth, "Ver Calendario")
                     }
                 }
             )
@@ -68,7 +71,7 @@ fun CursosScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "📚 No tienes cursos",
+                                text = "📚 No tienes cursos activos",
                                 style = MaterialTheme.typography.titleLarge
                             )
                             Spacer(modifier = Modifier.height(8.dp))

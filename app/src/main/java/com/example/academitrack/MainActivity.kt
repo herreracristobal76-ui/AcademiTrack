@@ -12,6 +12,7 @@ import com.academitrack.app.domain.*
 import com.academitrack.app.services.*
 import com.academitrack.app.ui.*
 import com.academitrack.app.persistence.PersistenciaLocal
+import com.academitrack.app.domain.Semestre
 
 class MainActivity : ComponentActivity() {
 
@@ -65,7 +66,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        // Guardar datos al pausar la app
         persistencia.guardarAsistencias(gestorAsistencia.obtenerTodasAsistencias())
         persistencia.guardarHorarios(gestorHorario.obtenerTodasClases())
     }
@@ -82,6 +82,7 @@ fun AcademiTrackApp(
 ) {
     var pantallaActual by remember { mutableStateOf("cursos") }
     var cursoSeleccionado by remember { mutableStateOf<Curso?>(null) }
+    var semestreSeleccionado by remember { mutableStateOf<Semestre?>(null) }
 
     val apiKey = "AIzaSyDtpM1m_CHzXefhZ9zYcv3qWe1nnkt7rvo"
 
@@ -101,7 +102,7 @@ fun AcademiTrackApp(
     when (pantallaActual) {
         "cursos" -> {
             CursosScreen(
-                cursos = cursos,
+                cursos = cursos.filter { it.estaActivo() },
                 onCursoClick = { curso ->
                     cursoSeleccionado = curso
                     pantallaActual = "detalle"
@@ -114,8 +115,42 @@ fun AcademiTrackApp(
                 },
                 onVerCalendario = {
                     pantallaActual = "calendario_mensual"
+                },
+                onVerArchivados = {
+                    pantallaActual = "cursos_archivados"
                 }
             )
+        }
+
+        "cursos_archivados" -> {
+            CursosArchivadosScreen(
+                cursos = cursos.toList(),
+                onVolverClick = { pantallaActual = "cursos" },
+                onCursoClick = { curso ->
+                    cursoSeleccionado = curso
+                    pantallaActual = "detalle_archivado"
+                }
+            )
+        }
+
+        "detalle_archivado" -> {
+            cursoSeleccionado?.let { curso ->
+                DetalleCursoArchivadoScreen(
+                    curso = curso,
+                    gestorNotas = gestorNotas,
+                    gestorAsistencia = gestorAsistencia,
+                    onVolverClick = { pantallaActual = "cursos_archivados" },
+                    onReactivar = { nuevoSemestre ->
+                        curso.reactivar(nuevoSemestre)
+                        val index = cursos.indexOfFirst { it.getId() == curso.getId() }
+                        if (index != -1) {
+                            cursos[index] = curso
+                            persistencia.guardarCursos(cursos.toList())
+                        }
+                        pantallaActual = "cursos"
+                    }
+                )
+            }
         }
 
         "agregar_curso" -> {
@@ -144,6 +179,27 @@ fun AcademiTrackApp(
                         cursos.remove(curso)
                         persistencia.guardarCursos(cursos.toList())
                         pantallaActual = "cursos"
+                    },
+                    onArchivarCurso = { pantallaActual = "archivar_curso" }
+                )
+            }
+        }
+
+        "archivar_curso" -> {
+            cursoSeleccionado?.let { curso ->
+                val promedio = gestorNotas.calcularPromedioActual(curso.getId())
+                ArchivarCursoScreen(
+                    curso = curso,
+                    promedioActual = promedio,
+                    onVolverClick = { pantallaActual = "detalle" },
+                    onArchivar = {estado, notaFinal ->
+                        curso.archivar(estado, notaFinal)
+                        val index = cursos.indexOfFirst { it.getId() == curso.getId() }
+                        if (index != -1) {
+                            cursos[index] = curso
+                            persistencia.guardarCursos(cursos.toList())
+                        }
+                        pantallaActual = "cursos"
                     }
                 )
             }
@@ -156,9 +212,7 @@ fun AcademiTrackApp(
                     onVolverClick = { pantallaActual = "detalle" },
                     onGuardar = { eval: Evaluacion ->
                         gestorNotas.agregarEvaluacion(eval)
-                        persistencia.guardarEvaluaciones(
-                            mapOf(eval.getId() to eval)
-                        )
+                        persistencia.guardarEvaluaciones(mapOf(eval.getId() to eval))
                         pantallaActual = "detalle"
                     }
                 )
@@ -173,9 +227,7 @@ fun AcademiTrackApp(
                     onVolverClick = { pantallaActual = "detalle" },
                     onGuardar = { eval: Evaluacion ->
                         gestorNotas.agregarEvaluacion(eval)
-                        persistencia.guardarEvaluaciones(
-                            mapOf(eval.getId() to eval)
-                        )
+                        persistencia.guardarEvaluaciones(mapOf(eval.getId() to eval))
                         pantallaActual = "detalle"
                     }
                 )
@@ -231,7 +283,7 @@ fun AcademiTrackApp(
 
         "notificaciones" -> {
             ConfigurarNotificacionesScreen(
-                cursos = cursos.toList(),
+                cursos = cursos.filter { it.estaActivo() },
                 onVolverClick = { pantallaActual = "ajustes" },
                 persistencia = persistencia
             )
@@ -241,9 +293,9 @@ fun AcademiTrackApp(
             CalendarioMensualScreen(
                 gestorHorario = gestorHorario,
                 gestorAsistencia = gestorAsistencia,
-                cursos = cursos.toList(),
+                cursos = cursos.filter { it.estaActivo() },
                 onVolverClick = { pantallaActual = "cursos" },
-                onRegistrarHorario = { pantallaActual = "registrar_horario" },
+                onRegistrarHorario = { pantallaActual = "seleccionar_semestre" },
                 onVerHorarioSemanal = { pantallaActual = "horario_semanal" }
             )
         }
@@ -252,23 +304,56 @@ fun AcademiTrackApp(
             HorarioSemanalScreen(
                 gestorHorario = gestorHorario,
                 onVolverClick = { pantallaActual = "calendario_mensual" },
-                onRegistrarHorario = { pantallaActual = "registrar_horario" }
+                onRegistrarHorario = { pantallaActual = "seleccionar_semestre" }
+            )
+        }
+
+        "seleccionar_semestre" -> {
+            SeleccionarSemestreScreen(
+                onVolverClick = { pantallaActual = "horario_semanal" },
+                onSemestreSeleccionado = { semestre ->
+                    semestreSeleccionado = semestre
+                    pantallaActual = "registrar_horario"
+                }
             )
         }
 
         "registrar_horario" -> {
-            RegistrarHorarioScreen(
-                apiKey = apiKey,
-                cursos = cursos.toList(),
-                onVolverClick = { pantallaActual = "horario_semanal" },
-                onGuardarHorario = { clases ->
-                    clases.forEach { gestorHorario.agregarClase(it) }
-                    persistencia.guardarHorarios(gestorHorario.obtenerTodasClases())
-                    pantallaActual = "horario_semanal"
-                }
-            )
+            semestreSeleccionado?.let { semestre ->
+                RegistrarHorarioScreen(
+                    apiKey = apiKey,
+                    cursos = cursos.filter { it.estaActivo() },
+                    semestre = semestre,
+                    onVolverClick = { pantallaActual = "seleccionar_semestre" },
+                    onGuardarHorario = { resultado ->
+                        // Agregar cursos nuevos
+                        resultado.cursosNuevos.forEach { nuevoCurso ->
+                            cursos.add(nuevoCurso)
+                        }
+
+                        // Agregar clases al horario
+                        resultado.clases.forEach { gestorHorario.agregarClase(it) }
+
+                        // Guardar todo
+                        persistencia.guardarCursos(cursos.toList())
+                        persistencia.guardarHorarios(gestorHorario.obtenerTodasClases())
+
+                        pantallaActual = "horario_semanal"
+                    }
+                )
+            }
         }
     }
+}
+
+@Composable
+fun ArchivarCursoScreen(
+    curso: Curso,
+    promedioActual: Double,
+    onVolverClick: () -> Unit,
+    onArchivar: (ERROR, ERROR) -> Unit
+) {
+    TODO("Not yet implemented")
 }
 
 @Composable

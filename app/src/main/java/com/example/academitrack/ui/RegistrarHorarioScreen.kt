@@ -23,14 +23,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.academitrack.app.domain.*
-import com.academitrack.app.services.HorarioIAService
-import com.academitrack.app.services.ResultadoHorarioIA
+import com.academitrack.app.services.*
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 
 /**
- * Pantalla para registrar horario desde foto con IA
- *
+ * Pantalla para registrar horario con semestre
  * UBICACIÓN: app/src/main/java/com/academitrack/app/ui/RegistrarHorarioScreen.kt
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,8 +36,9 @@ import java.io.ByteArrayOutputStream
 fun RegistrarHorarioScreen(
     apiKey: String,
     cursos: List<Curso>,
+    semestre: Semestre,
     onVolverClick: () -> Unit,
-    onGuardarHorario: (List<ClaseHorario>) -> Unit
+    onGuardarHorario: (ResultadoHorarioConCursos) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -55,7 +54,7 @@ fun RegistrarHorarioScreen(
 
     var imagenCapturada by remember { mutableStateOf<Bitmap?>(null) }
     var procesando by remember { mutableStateOf(false) }
-    var resultado by remember { mutableStateOf<ResultadoHorarioIA?>(null) }
+    var resultado by remember { mutableStateOf<ResultadoHorarioConCursos?>(null) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -99,7 +98,7 @@ fun RegistrarHorarioScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Registrar Horario con IA") },
+                title = { Text("Registrar Horario") },
                 navigationIcon = {
                     IconButton(onClick = onVolverClick) {
                         Icon(Icons.Default.ArrowBack, "Volver")
@@ -140,7 +139,12 @@ fun RegistrarHorarioScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "La IA extraerá automáticamente todas tus clases",
+                            text = semestre.obtenerNombre(),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = semestre.tipo.descripcion,
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
@@ -182,13 +186,13 @@ fun RegistrarHorarioScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "💡 Consejos:",
+                            text = "💡 La IA hará:",
                             style = MaterialTheme.typography.titleSmall
                         )
-                        Text("• Foto clara y enfocada", style = MaterialTheme.typography.bodySmall)
-                        Text("• Buena iluminación", style = MaterialTheme.typography.bodySmall)
-                        Text("• Todo el horario visible", style = MaterialTheme.typography.bodySmall)
-                        Text("• Sin reflejos o sombras", style = MaterialTheme.typography.bodySmall)
+                        Text("• Detectar todos los cursos", style = MaterialTheme.typography.bodySmall)
+                        Text("• Crear cursos automáticamente", style = MaterialTheme.typography.bodySmall)
+                        Text("• Extraer horarios y salas", style = MaterialTheme.typography.bodySmall)
+                        Text("• Asignar al ${semestre.obtenerNombre()}", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -216,14 +220,14 @@ fun RegistrarHorarioScreen(
                 if (procesando) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     Text(
-                        "🤖 Analizando horario con IA...",
+                        "🤖 Analizando horario...",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
                 }
 
                 resultado?.let { res ->
-                    if (res.exito && res.clases.isNotEmpty()) {
+                    if (res.exito) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
@@ -232,8 +236,28 @@ fun RegistrarHorarioScreen(
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
-                                    text = "✅ ${res.clases.size} clases detectadas",
+                                    text = "✅ Procesado exitosamente",
                                     style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(text = res.mensaje)
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                if (res.cursosNuevos.isNotEmpty()) {
+                                    Text(
+                                        text = "🆕 Cursos nuevos:",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    res.cursosNuevos.forEach { curso ->
+                                        Text(
+                                            text = "• ${curso.getNombre()} (${curso.getCodigo()})",
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                }
+
+                                Text(
+                                    text = "📅 ${res.clases.size} clases detectadas",
+                                    style = MaterialTheme.typography.bodySmall
                                 )
                                 Text(
                                     text = "Confianza: ${String.format("%.0f", res.confianza)}%",
@@ -245,10 +269,12 @@ fun RegistrarHorarioScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Button(
-                            onClick = { onGuardarHorario(res.clases) },
+                            onClick = { onGuardarHorario(res) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("💾 Guardar Horario")
+                            Icon(Icons.Default.Save, null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Guardar Horario y Cursos")
                         }
                     } else {
                         Card(
@@ -259,13 +285,10 @@ fun RegistrarHorarioScreen(
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
-                                    text = "❌ No se pudo procesar el horario",
+                                    text = "❌ No se pudo procesar",
                                     style = MaterialTheme.typography.titleMedium
                                 )
-                                Text(
-                                    text = res.mensaje,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
+                                Text(text = res.mensaje)
                             }
                         }
                     }
@@ -297,12 +320,13 @@ fun RegistrarHorarioScreen(
                                     imagenCapturada!!.compress(Bitmap.CompressFormat.JPEG, 85, stream)
                                     val base64 = iaService.convertirABase64(stream.toByteArray())
 
-                                    val res = iaService.procesarImagenHorario(base64, cursos)
+                                    val res = iaService.procesarImagenHorario(base64, cursos, semestre)
                                     resultado = res
                                 } catch (e: Exception) {
                                     e.printStackTrace()
-                                    resultado = ResultadoHorarioIA(
+                                    resultado = ResultadoHorarioConCursos(
                                         exito = false,
+                                        cursosNuevos = emptyList(),
                                         clases = emptyList(),
                                         confianza = 0.0,
                                         mensaje = "Error: ${e.message}"

@@ -23,7 +23,8 @@ fun DetalleCursoScreen(
     onAgregarConIA: () -> Unit,
     onVerCalendario: () -> Unit,
     onEditarCurso: () -> Unit,
-    onEliminarCurso: () -> Unit
+    onEliminarCurso: () -> Unit,
+    onArchivarCurso: () -> Unit
 ) {
     var mostrarMenuOpciones by remember { mutableStateOf(false) }
     var mostrarDialogoEliminar by remember { mutableStateOf(false) }
@@ -63,6 +64,14 @@ fun DetalleCursoScreen(
                                 onEditarCurso()
                             }
                         )
+                        DropdownMenuItem(
+                            text = { Text("📦 Archivar curso") },
+                            onClick = {
+                                mostrarMenuOpciones = false
+                                onArchivarCurso()
+                            }
+                        )
+                        Divider()
                         DropdownMenuItem(
                             text = { Text("🗑️ Eliminar curso") },
                             onClick = {

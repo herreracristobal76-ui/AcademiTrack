@@ -13,6 +13,96 @@ class PersistenciaLocal(private val context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("academitrack_prefs", Context.MODE_PRIVATE)
 
+    fun guardarCursos(cursos: List<Curso>): Boolean {
+        return try {
+            val jsonArray = JSONArray()
+            cursos.forEach { curso ->
+                val jsonObj = JSONObject().apply {
+                    put("id", curso.getId())
+                    put("nombre", curso.getNombre())
+                    put("codigo", curso.getCodigo())
+                    put("asistenciaMinima", curso.getPorcentajeAsistenciaMinimo())
+                    put("notaMinima", curso.getNotaMinimaAprobacion())
+                    put("evaluaciones", JSONArray(curso.getEvaluaciones()))
+                    put("asistencias", JSONArray(curso.getAsistencias()))
+                    put("estado", curso.getEstado().name)
+                    put("idSemestre", curso.getIdSemestre() ?: "")
+                    put("notaFinal", curso.getNotaFinal() ?: 0.0)
+                    put("fechaArchivado", curso.getFechaArchivado() ?: 0L)
+                }
+                jsonArray.put(jsonObj)
+            }
+
+            val file = File(context.filesDir, "cursos_$fileName")
+            file.writeText(jsonArray.toString())
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    fun cargarCursos(): List<Curso> {
+        return try {
+            val file = File(context.filesDir, "cursos_$fileName")
+            if (!file.exists()) return emptyList()
+
+            val jsonString = file.readText()
+            val jsonArray = JSONArray(jsonString)
+            val cursos = mutableListOf<Curso>()
+
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+
+                val evaluaciones = mutableListOf<String>()
+                val evalArray = obj.optJSONArray("evaluaciones")
+                if (evalArray != null) {
+                    for (j in 0 until evalArray.length()) {
+                        evaluaciones.add(evalArray.getString(j))
+                    }
+                }
+
+                val asistencias = mutableListOf<String>()
+                val asistArray = obj.optJSONArray("asistencias")
+                if (asistArray != null) {
+                    for (j in 0 until asistArray.length()) {
+                        asistencias.add(asistArray.getString(j))
+                    }
+                }
+
+                val estado = try {
+                    EstadoCurso.valueOf(obj.optString("estado", "ACTIVO"))
+                } catch (e: Exception) {
+                    EstadoCurso.ACTIVO
+                }
+
+                val idSemestre = obj.optString("idSemestre", "").takeIf { it.isNotEmpty() }
+                val notaFinal = obj.optDouble("notaFinal").takeIf { it != 0.0 }
+                val fechaArchivado = obj.optLong("fechaArchivado").takeIf { it != 0L }
+
+                val curso = Curso(
+                    idCurso = obj.getString("id"),
+                    nombre = obj.getString("nombre"),
+                    codigo = obj.getString("codigo"),
+                    porcentajeAsistenciaMinimo = obj.getDouble("asistenciaMinima"),
+                    notaMinimaAprobacion = obj.getDouble("notaMinima"),
+                    evaluaciones = evaluaciones,
+                    asistencias = asistencias,
+                    estado = estado,
+                    idSemestre = idSemestre,
+                    notaFinal = notaFinal,
+                    fechaArchivado = fechaArchivado
+                )
+                cursos.add(curso)
+            }
+
+            cursos
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
     fun guardarHorarios(clases: List<ClaseHorario>): Boolean {
         return try {
             val jsonArray = JSONArray()
@@ -69,78 +159,6 @@ class PersistenciaLocal(private val context: Context) {
             }
 
             clases
-        } catch (e: Exception) {
-            e.printStackTrace()
-            emptyList()
-        }
-    }
-
-    fun guardarCursos(cursos: List<Curso>): Boolean {
-        return try {
-            val jsonArray = JSONArray()
-            cursos.forEach { curso ->
-                val jsonObj = JSONObject().apply {
-                    put("id", curso.getId())
-                    put("nombre", curso.getNombre())
-                    put("codigo", curso.getCodigo())
-                    put("asistenciaMinima", curso.getPorcentajeAsistenciaMinimo())
-                    put("notaMinima", curso.getNotaMinimaAprobacion())
-                    put("evaluaciones", JSONArray(curso.getEvaluaciones()))
-                    put("asistencias", JSONArray(curso.getAsistencias()))
-                }
-                jsonArray.put(jsonObj)
-            }
-
-            val file = File(context.filesDir, "cursos_$fileName")
-            file.writeText(jsonArray.toString())
-            true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
-        }
-    }
-
-    fun cargarCursos(): List<Curso> {
-        return try {
-            val file = File(context.filesDir, "cursos_$fileName")
-            if (!file.exists()) return emptyList()
-
-            val jsonString = file.readText()
-            val jsonArray = JSONArray(jsonString)
-            val cursos = mutableListOf<Curso>()
-
-            for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-
-                val evaluaciones = mutableListOf<String>()
-                val evalArray = obj.optJSONArray("evaluaciones")
-                if (evalArray != null) {
-                    for (j in 0 until evalArray.length()) {
-                        evaluaciones.add(evalArray.getString(j))
-                    }
-                }
-
-                val asistencias = mutableListOf<String>()
-                val asistArray = obj.optJSONArray("asistencias")
-                if (asistArray != null) {
-                    for (j in 0 until asistArray.length()) {
-                        asistencias.add(asistArray.getString(j))
-                    }
-                }
-
-                val curso = Curso(
-                    idCurso = obj.getString("id"),
-                    nombre = obj.getString("nombre"),
-                    codigo = obj.getString("codigo"),
-                    porcentajeAsistenciaMinimo = obj.getDouble("asistenciaMinima"),
-                    notaMinimaAprobacion = obj.getDouble("notaMinima"),
-                    evaluaciones = evaluaciones,
-                    asistencias = asistencias
-                )
-                cursos.add(curso)
-            }
-
-            cursos
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()
@@ -296,22 +314,6 @@ class PersistenciaLocal(private val context: Context) {
         }
     }
 
-    fun exportarReporteCSV(cursoId: String, evaluaciones: List<Evaluacion>): String {
-        val csv = StringBuilder()
-        csv.appendLine("Nombre,Porcentaje,Nota,Tipo,Fecha")
-
-        evaluaciones.filter { it.getIdCurso() == cursoId }.forEach { eval ->
-            val fecha = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
-                .format(java.util.Date(eval.getFecha()))
-            csv.appendLine(
-                "${eval.getNombre()},${eval.getPorcentaje()}," +
-                        "${eval.notaObtenida ?: "Pendiente"},${eval.obtenerTipoEvaluacion()},$fecha"
-            )
-        }
-
-        return csv.toString()
-    }
-
     fun guardarConfigNotificacion(cursoId: String, config: com.academitrack.app.ui.NotificacionConfig) {
         prefs.edit().apply {
             putBoolean("notif_activo_$cursoId", config.activo)
@@ -334,10 +336,10 @@ class PersistenciaLocal(private val context: Context) {
             File(context.filesDir, "cursos_$fileName").delete()
             File(context.filesDir, "evaluaciones_$fileName").delete()
             File(context.filesDir, "asistencias_$fileName").delete()
+            File(context.filesDir, "horarios_$fileName").delete()
             prefs.edit().clear().apply()
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 }
-
