@@ -16,8 +16,7 @@ import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
 /**
- * Servicio de IA para procesar Horarios (Imágenes y PDFs).
- * ACTUALIZADO: Usa modelo 'gemini-1.5-flash' para evitar errores de permisos.
+ * VERSIÓN ACTUALIZADA - Con creación automática de cursos
  */
 class HorarioIAService(private val apiKey: String) {
 
@@ -29,53 +28,52 @@ class HorarioIAService(private val apiKey: String) {
 
     companion object {
         private const val TAG = "HorarioIA"
+        private const val MAX_IMAGE_SIZE = 1024
+        private const val JPEG_QUALITY = 75
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-        // Calidad de compresión para imágenes
-        private const val JPEG_QUALITY = 80
     }
 
-    /**
-     * Procesa un archivo (Imagen o PDF) para extraer el horario.
-     */
-    suspend fun procesarArchivoHorario(
-        base64Data: String,
-        mimeType: String,
+    suspend fun procesarImagenHorario(
+        imagenBase64: String,
         cursosExistentes: List<Curso>,
         semestre: Semestre
     ): ResultadoHorarioConCursos = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "🔍 Procesando horario ($mimeType)...")
+            Log.d(TAG, "🔍 Procesando horario para ${semestre.obtenerNombre()}")
 
-            // Optimizar solo si es imagen, los PDF se envían directo
-            val (datosFinales, mimeFinal) = if (mimeType.startsWith("image")) {
-                val optimizada = optimizarImagen(base64Data)
-                Pair(optimizada, "image/jpeg")
-            } else {
-                Pair(base64Data, mimeType)
-            }
+            val imagenOptimizada = optimizarImagen(imagenBase64)
 
             val cursosInfo = if (cursosExistentes.isNotEmpty()) {
-                "Cursos existentes:\n" + cursosExistentes
+                "Cursos existentes activos:\n" + cursosExistentes
                     .filter { it.estaActivo() }
                     .joinToString("\n") { "• ${it.getNombre()} (${it.getCodigo()})" }
-            } else "No hay cursos registrados"
+            } else "No hay cursos registrados aún"
 
             val prompt = """
-                Analiza este documento (horario académico).
+                Analiza esta imagen de un horario académico universitario.
                 
                 CONTEXTO:
                 Semestre: ${semestre.obtenerNombre()}
+                Período: ${semestre.tipo.descripcion}
+                
                 $cursosInfo
                 
-                TU TAREA:
-                Identifica cursos, salas, profesores y horarios.
+                ESTRUCTURA:
+                • Columnas: Días de la semana
+                • Filas: Módulos con horarios
+                • Celdas: Nombre curso, sala, profesor
                 
-                FORMATO JSON REQUERIDO (Sin markdown):
+                INSTRUCCIONES:
+                1. Identifica TODOS los cursos únicos del horario
+                2. Para cada curso, extrae su código si está visible
+                3. Genera una lista de cursos y sus clases
+                
+                FORMATO DE RESPUESTA (JSON sin markdown):
                 {
                     "cursos": [
                         {
-                            "nombre": "Cálculo I",
-                            "codigo": "MAT-101",
+                            "nombre": "Programación Orientada a Objetos",
+                            "codigo": "INF-2241",
                             "clases": [
                                 {
                                     "sala": "A-201",
@@ -90,30 +88,48 @@ class HorarioIAService(private val apiKey: String) {
                     ]
                 }
                 
-                NOTA: dia 1=Lunes, 2=Martes... 6=Sábado.
+                IMPORTANTE:
+                • Agrupa todas las clases por curso
+                • Si no ves el código, genera uno (ej: "CURSO-001")
+                • dia: 1=Lun, 2=Mar, 3=Mié, 4=Jue, 5=Vie
+                • tipo: CATEDRA, LABORATORIO, AYUDANTIA, TALLER
             """.trimIndent()
 
-            // MODELO ESTABLE
-            val modelo = "gemini-1.5-flash"
+            val modelos = listOf(
+                "gemini-2.5-flash",
+                "gemini-flash-latest",
+                "gemini-2.0-flash"
+            )
 
-            return@withContext llamarAPIYParsearConCursos(modelo, datosFinales, mimeFinal, prompt, cursosExistentes, semestre)
+            for ((index, modelo) in modelos.withIndex()) {
+                try {
+                    Log.d(TAG, "📡 [${index + 1}/${modelos.size}] $modelo")
+                    return@withContext llamarAPIYParsearConCursos(modelo, imagenOptimizada, prompt, cursosExistentes, semestre)
+                } catch (e: Exception) {
+                    Log.w(TAG, "⚠️ Falló: ${e.message}")
+                    if (e.message?.contains("403") == true || e.message?.contains("429") == true) {
+                        throw e
+                    }
+                }
+            }
+
+            throw Exception("No se pudo procesar el horario")
 
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error general", e)
+            Log.e(TAG, "❌ Error", e)
             ResultadoHorarioConCursos(
                 exito = false,
                 cursosNuevos = emptyList(),
                 clases = emptyList(),
                 confianza = 0.0,
-                mensaje = "Error: ${e.message}"
+                mensaje = e.message ?: "Error desconocido"
             )
         }
     }
 
     private fun llamarAPIYParsearConCursos(
         modelo: String,
-        base64Data: String,
-        mimeType: String,
+        imagenBase64: String,
         prompt: String,
         cursosExistentes: List<Curso>,
         semestre: Semestre
@@ -127,17 +143,31 @@ class HorarioIAService(private val apiKey: String) {
                         put(JSONObject().apply { put("text", prompt) })
                         put(JSONObject().apply {
                             put("inline_data", JSONObject().apply {
-                                put("mime_type", mimeType)
-                                put("data", base64Data)
+                                put("mime_type", "image/jpeg")
+                                put("data", imagenBase64)
                             })
                         })
                     })
                 })
             })
-            // Configuración para respuestas más creativas/precisas
             put("generationConfig", JSONObject().apply {
                 put("temperature", 0.1)
+                put("topK", 10)
+                put("topP", 0.5)
                 put("maxOutputTokens", 4096)
+            })
+            put("safetySettings", JSONArray().apply {
+                listOf(
+                    "HARM_CATEGORY_HARASSMENT",
+                    "HARM_CATEGORY_HATE_SPEECH",
+                    "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "HARM_CATEGORY_DANGEROUS_CONTENT"
+                ).forEach { category ->
+                    put(JSONObject().apply {
+                        put("category", category)
+                        put("threshold", "BLOCK_NONE")
+                    })
+                }
             })
         }
 
@@ -147,17 +177,12 @@ class HorarioIAService(private val apiKey: String) {
             .build()
 
         val response = client.newCall(request).execute()
-        val responseBody = response.body?.string() ?: ""
 
         if (!response.isSuccessful) {
-            val errorMsg = when (response.code) {
-                403 -> "Error 403: API Key sin permisos."
-                404 -> "Error 404: Modelo no encontrado."
-                else -> "Error del servidor (${response.code})"
-            }
-            throw Exception(errorMsg)
+            throw Exception("Error ${response.code}")
         }
 
+        val responseBody = response.body?.string() ?: throw Exception("Respuesta vacía")
         return parsearRespuestaConCursos(responseBody, cursosExistentes, semestre)
     }
 
@@ -173,84 +198,108 @@ class HorarioIAService(private val apiKey: String) {
                 throw Exception(jsonResponse.getJSONObject("error").getString("message"))
             }
 
-            val candidates = jsonResponse.optJSONArray("candidates")
-            if (candidates == null || candidates.length() == 0) {
-                throw Exception("Sin respuesta de la IA.")
+            val candidates = jsonResponse.getJSONArray("candidates")
+            if (candidates.length() == 0) {
+                throw Exception("Sin respuesta generada")
             }
 
-            val content = candidates.getJSONObject(0).optJSONObject("content")
-            val parts = content?.optJSONArray("parts")
-            val textoRespuesta = parts?.getJSONObject(0)?.optString("text") ?: ""
+            val content = candidates.getJSONObject(0).getJSONObject("content")
+            val parts = content.getJSONArray("parts")
+            val textoRespuesta = parts.getJSONObject(0).getString("text")
 
             val jsonLimpio = textoRespuesta
                 .replace("```json", "")
                 .replace("```", "")
                 .trim()
 
-            if (jsonLimpio.isEmpty()) throw Exception("Respuesta vacía.")
-
             val datos = JSONObject(jsonLimpio)
-            val cursosArray = datos.optJSONArray("cursos") ?: JSONArray()
+            val cursosArray = datos.getJSONArray("cursos")
 
             val cursosNuevos = mutableListOf<Curso>()
             val todasLasClases = mutableListOf<ClaseHorario>()
 
             for (i in 0 until cursosArray.length()) {
-                val objCurso = cursosArray.getJSONObject(i)
-                val nombreCurso = objCurso.optString("nombre", "Curso $i")
-                val codigoCurso = objCurso.optString("codigo", "C-$i")
+                try {
+                    val objCurso = cursosArray.getJSONObject(i)
+                    val nombreCurso = objCurso.getString("nombre")
+                    val codigoCurso = objCurso.optString("codigo", "CURSO-${System.currentTimeMillis() / 1000}")
 
-                // Buscar curso existente
-                val cursoExistente = cursosExistentes.find {
-                    it.estaActivo() && (
-                            it.getCodigo().equals(codigoCurso, true) ||
-                                    it.getNombre().equals(nombreCurso, true)
-                            )
-                }
+                    // Verificar si el curso ya existe
+                    val cursoExistente = cursosExistentes.find {
+                        it.estaActivo() && (
+                                it.getCodigo().equals(codigoCurso, ignoreCase = true) ||
+                                        it.getNombre().equals(nombreCurso, ignoreCase = true)
+                                )
+                    }
 
-                val idCurso = cursoExistente?.getId() ?: "curso_${System.currentTimeMillis()}_$i"
+                    val idCurso = cursoExistente?.getId() ?: "curso_${System.currentTimeMillis()}_$i"
 
-                if (cursoExistente == null) {
-                    val nuevoCurso = Curso(
-                        idCurso = idCurso,
-                        nombre = nombreCurso,
-                        codigo = codigoCurso,
-                        idSemestre = semestre.id
-                    )
-                    cursosNuevos.add(nuevoCurso)
-                }
+                    // Si no existe, crear nuevo curso
+                    if (cursoExistente == null) {
+                        val nuevoCurso = Curso(
+                            idCurso = idCurso,
+                            nombre = nombreCurso,
+                            codigo = codigoCurso,
+                            porcentajeAsistenciaMinimo = 75.0,
+                            notaMinimaAprobacion = 4.0,
+                            idSemestre = semestre.id
+                        )
+                        cursosNuevos.add(nuevoCurso)
+                        Log.d(TAG, "✨ Curso nuevo: $nombreCurso ($codigoCurso)")
+                    } else {
+                        Log.d(TAG, "♻️ Curso existente: $nombreCurso")
+                    }
 
-                // Clases
-                val clasesArray = objCurso.optJSONArray("clases") ?: JSONArray()
-                for (j in 0 until clasesArray.length()) {
-                    val objClase = clasesArray.getJSONObject(j)
-                    val clase = ClaseHorario(
-                        id = "clase_${System.currentTimeMillis()}_${i}_$j",
-                        idCurso = idCurso,
-                        nombreCurso = nombreCurso,
-                        sala = objClase.optString("sala", "S/A"),
-                        profesor = objClase.optString("profesor", "S/P"),
-                        diaSemana = DiaSemana.fromNumero(objClase.optInt("dia", 1)),
-                        horaInicio = objClase.optString("horaInicio", "08:00"),
-                        horaFin = objClase.optString("horaFin", "09:30"),
-                        tipoClase = TipoClase.valueOf(objClase.optString("tipo", "CATEDRA").uppercase()),
-                        color = generarColor(nombreCurso)
-                    )
-                    todasLasClases.add(clase)
+                    // Procesar clases del curso
+                    val clasesArray = objCurso.getJSONArray("clases")
+                    for (j in 0 until clasesArray.length()) {
+                        val objClase = clasesArray.getJSONObject(j)
+
+                        val clase = ClaseHorario(
+                            id = "clase_${System.currentTimeMillis()}_${i}_$j",
+                            idCurso = idCurso,
+                            nombreCurso = nombreCurso,
+                            sala = objClase.optString("sala", "Por definir"),
+                            profesor = objClase.optString("profesor", "Por definir"),
+                            diaSemana = DiaSemana.fromNumero(objClase.getInt("dia")),
+                            horaInicio = objClase.getString("horaInicio"),
+                            horaFin = objClase.getString("horaFin"),
+                            tipoClase = when (objClase.optString("tipo", "CATEDRA").uppercase()) {
+                                "LABORATORIO" -> TipoClase.LABORATORIO
+                                "AYUDANTIA" -> TipoClase.AYUDANTIA
+                                "TALLER" -> TipoClase.TALLER
+                                else -> TipoClase.CATEDRA
+                            },
+                            color = generarColor(nombreCurso)
+                        )
+
+                        todasLasClases.add(clase)
+                    }
+
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error procesando curso $i", e)
                 }
             }
 
             return ResultadoHorarioConCursos(
-                exito = true,
+                exito = todasLasClases.isNotEmpty(),
                 cursosNuevos = cursosNuevos,
                 clases = todasLasClases,
-                confianza = 90.0,
-                mensaje = "Se detectaron ${todasLasClases.size} clases."
+                confianza = when {
+                    todasLasClases.size >= 15 -> 90.0
+                    todasLasClases.size >= 10 -> 85.0
+                    todasLasClases.size >= 5 -> 75.0
+                    else -> 60.0
+                },
+                mensaje = when {
+                    cursosNuevos.isEmpty() -> "✅ ${todasLasClases.size} clases detectadas"
+                    else -> "✅ ${cursosNuevos.size} cursos nuevos, ${todasLasClases.size} clases"
+                }
             )
 
         } catch (e: Exception) {
             Log.e(TAG, "Error parseando", e)
-            throw Exception("Error de formato: ${e.message}")
+            throw Exception("Error: ${e.message}")
         }
     }
 
@@ -276,14 +325,19 @@ class HorarioIAService(private val apiKey: String) {
     }
 
     private fun generarColor(nombre: String): String {
-        val colores = listOf("#6200EE", "#03DAC6", "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A")
+        val colores = listOf(
+            "#6200EE", "#03DAC6", "#FF6B6B", "#4ECDC4",
+            "#45B7D1", "#FFA07A", "#98D8C8", "#F7DC6F",
+            "#BB8FCE", "#85C1E2", "#F8B739", "#52B788"
+        )
         return colores[Math.abs(nombre.hashCode()) % colores.size]
     }
 
-    fun convertirABase64(bytes: ByteArray): String = Base64.encodeToString(bytes, Base64.NO_WRAP)
+    fun convertirABase64(bytes: ByteArray): String {
+        return Base64.encodeToString(bytes, Base64.NO_WRAP)
+    }
 }
 
-// CLASE DE DATOS NECESARIA
 data class ResultadoHorarioConCursos(
     val exito: Boolean,
     val cursosNuevos: List<Curso>,

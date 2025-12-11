@@ -30,7 +30,8 @@ fun CursosScreen(
     onAgregarCurso: () -> Unit,
     onAjustes: () -> Unit,
     onVerArchivados: () -> Unit,
-    onEliminarCurso: (Curso) -> Unit
+    onEliminarCurso: (Curso) -> Unit,
+    onVerCalendario: () -> Unit
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
