@@ -83,7 +83,7 @@ fun AcademiTrackApp(
     var pantallaActual by remember { mutableStateOf("cursos") }
     var cursoSeleccionado by remember { mutableStateOf<Curso?>(null) }
 
-    val apiKey = "AIzaSyAL5t_m929UQ2ZY8akM8d9oAeR3Zw0OD68"
+    val apiKey = "AIzaSyDtpM1m_CHzXefhZ9zYcv3qWe1nnkt7rvo"
 
     val cursos = remember {
         mutableStateListOf<Curso>().apply {

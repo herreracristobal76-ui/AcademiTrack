@@ -1,5 +1,7 @@
 package com.academitrack.app.services
 
+import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.util.Base64
 import android.util.Log
 import com.academitrack.app.domain.*
@@ -11,249 +13,206 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
 /**
- * Servicio para procesar imágenes de horarios con IA (Google Gemini)
- * VERSIÓN ACTUALIZADA - Solo usa gemini-1.5-flash
+ * Servicio optimizado para procesar imágenes de horarios con IA
  */
 class HorarioIAService(private val apiKey: String) {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(45, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
     companion object {
         private const val TAG = "HorarioIAService"
+        private const val MAX_IMAGE_SIZE = 800 // Tamaño máximo de la imagen
+        private const val JPEG_QUALITY = 70 // Calidad JPEG (0-100)
     }
 
+    /**
+     * Procesa una imagen de horario y extrae las clases
+     */
     suspend fun procesarImagenHorario(
         imagenBase64: String,
         cursos: List<Curso>
     ): ResultadoHorarioIA = withContext(Dispatchers.IO) {
         try {
-            val cursosInfo = cursos.joinToString("\n") {
-                "- ${it.getNombre()} (${it.getCodigo()})"
+            Log.d(TAG, "Iniciando procesamiento de horario")
+            Log.d(TAG, "Tamaño imagen original: ${imagenBase64.length} chars")
+
+            // Optimizar imagen antes de enviar
+            val imagenOptimizada = optimizarImagen(imagenBase64)
+            Log.d(TAG, "Tamaño imagen optimizada: ${imagenOptimizada.length} chars")
+
+            val cursosInfo = if (cursos.isNotEmpty()) {
+                cursos.joinToString("\n") { "- ${it.getNombre()} (${it.getCodigo()})" }
+            } else {
+                "No hay cursos registrados previamente"
             }
 
-            // Primera fase: Validar formato
-            val validacionPrompt = """
-                Analiza esta imagen y determina si es un horario académico válido.
+            // Prompt simplificado y más directo
+            val prompt = """
+                Analiza este horario académico y extrae TODAS las clases.
                 
-                Un horario válido DEBE tener:
-                1. Una tabla con días de la semana (Lunes, Martes, Miércoles, Jueves, Viernes)
-                2. Módulos numerados (1, 2, 3, etc.) con sus horarios (ej: 08:30-09:30)
-                3. Celdas con información de clases que incluyan al menos el nombre del curso
+                FORMATO ESPERADO DEL HORARIO:
+                - Columnas: Días de la semana (Lunes a Viernes)
+                - Filas: Módulos con horarios (ej: 1: 08:30-09:30)
+                - Celdas: Información de clases
                 
-                Responde SOLO con este JSON:
-                {
-                    "es_horario_valido": true o false,
-                    "razon": "explicación de por qué es válido o no",
-                    "tiene_modulos": true o false,
-                    "tiene_dias": true o false,
-                    "tiene_horarios": true o false
-                }
-            """.trimIndent()
-
-            val validacionResponse = llamarGeminiAPI(imagenBase64, validacionPrompt)
-            val esValido = validarFormatoHorario(validacionResponse)
-
-            if (!esValido.esValido) {
-                return@withContext ResultadoHorarioIA(
-                    exito = false,
-                    clases = emptyList(),
-                    confianza = 0.0,
-                    mensaje = """
-                        ❌ Formato de horario inválido
-                        
-                        ${esValido.razon}
-                        
-                        📋 Formato requerido:
-                        
-                        Tu imagen debe ser un horario académico con:
-                        
-                        ✓ Columnas con días de la semana (Lunes a Viernes)
-                        ✓ Filas con módulos numerados (1, 2, 3...)
-                        ✓ Horarios de cada módulo (ej: 08:30-09:30)
-                        ✓ Celdas con información de clases:
-                          • Nombre del curso
-                          • Sala
-                          • Profesor
-                        
-                        Ejemplo de formato correcto:
-                        | Módulo | Horario    | Lunes        | Martes       |
-                        |   1    | 08:30-09:30| INF-215      | INF-215      |
-                        |   2    | 09:35-10:35| Circuitos    | Circuitos    |
-                        
-                        Por favor, toma una foto clara de tu horario impreso o digital.
-                    """.trimIndent()
-                )
-            }
-
-            // Segunda fase: Extraer clases
-            val extraccionPrompt = """
-                Esta imagen contiene un horario académico semanal válido.
+                INSTRUCCIONES:
+                1. Por cada celda con texto, extrae:
+                   - Nombre del curso
+                   - Sala (si está)
+                   - Profesor (si está)
+                   - Día (1=Lun, 2=Mar, 3=Mié, 4=Jue, 5=Vie)
+                   - Horario EXACTO del módulo
                 
-                Cursos del estudiante:
+                2. Si un curso aparece en varios días, créalo como clases SEPARADAS
+                
+                3. IMPORTANTE: USA LOS HORARIOS EXACTOS DEL HORARIO, NO inventes
+                
+                Cursos conocidos:
                 $cursosInfo
                 
-                INSTRUCCIONES CRÍTICAS - SIGUE EXACTAMENTE:
-                
-                1. IDENTIFICACIÓN DE MÓDULOS:
-                   - Busca la columna izquierda que dice "Módulo" o "Bloque"
-                   - Cada fila tiene un número (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, etc.)
-                   - Cada módulo tiene su HORARIO EXACTO (ej: 08:30-09:30, 09:35-10:35)
-                
-                2. LECTURA DE HORARIOS:
-                   - LEE los horarios de la columna "Horario" o similar
-                   - Formato típico: "HH:mm - HH:mm" o "HH:mm-HH:mm"
-                   - Ejemplos: "08:30-09:30", "11:55-12:55", "14:10-15:10"
-                   - USA ESTOS HORARIOS EXACTOS, NO inventes otros
-                
-                3. LECTURA DE CLASES:
-                   - Para cada día (Lunes, Martes, Miércoles, Jueves, Viernes)
-                   - Lee de ARRIBA hacia ABAJO siguiendo los módulos
-                   - Si una celda contiene texto, extrae:
-                     * Nombre del curso (puede incluir código como INF-215)
-                     * Sala (ej: F-411, Lab DCI03, Sala 201)
-                     * Profesor (si está visible)
-                     * Tipo: LABORATORIO si dice "Lab" o "Laboratorio", sino CATEDRA
-                
-                4. FORMATO DE RESPUESTA:
-                   Devuelve un JSON con este formato EXACTO:
-                   {
-                       "clases": [
-                           {
-                               "nombreCurso": "nombre completo incluyendo código si está",
-                               "codigo": "código extraído (ej: INF-215) o vacío",
-                               "sala": "sala exacta como aparece",
-                               "profesor": "nombre del profesor o 'Por definir'",
-                               "dia": número 1-5 (1=Lunes, 5=Viernes),
-                               "modulo": número del módulo (1, 2, 3...),
-                               "horaInicio": "HH:mm del inicio EXACTO del módulo",
-                               "horaFin": "HH:mm del fin EXACTO del módulo",
-                               "tipo": "CATEDRA" o "LABORATORIO"
-                           }
-                       ],
-                       "confianza": número 0-100
-                   }
-                
-                EJEMPLOS DE EXTRACCIÓN CORRECTA:
-                
-                Si el horario muestra:
-                - Módulo 1: 08:30-09:30
-                - Lunes módulo 1: "INF-215 Circuitos / F-411 / Prof. García"
-                
-                Debes crear:
+                Responde SOLO con JSON (sin markdown):
                 {
-                    "nombreCurso": "INF-215 Circuitos",
-                    "codigo": "INF-215",
-                    "sala": "F-411",
-                    "profesor": "Prof. García",
-                    "dia": 1,
-                    "modulo": 1,
-                    "horaInicio": "08:30",
-                    "horaFin": "09:30",
-                    "tipo": "CATEDRA"
+                    "clases": [
+                        {
+                            "nombreCurso": "nombre",
+                            "sala": "sala o 'Por definir'",
+                            "profesor": "profesor o 'Por definir'",
+                            "dia": 1-5,
+                            "horaInicio": "HH:mm",
+                            "horaFin": "HH:mm",
+                            "tipo": "CATEDRA o LABORATORIO"
+                        }
+                    ]
                 }
-                
-                REGLAS IMPORTANTES:
-                - Si un curso está en VARIOS DÍAS, créalo como CLASES SEPARADAS
-                - Si no encuentras el profesor, usa "Por definir"
-                - Si no encuentras la sala, usa "Por definir"
-                - NUNCA inventes horarios, usa SOLO los del horario
-                - Formato 24 horas SIEMPRE (14:30 NO 2:30 PM)
-                - Si hay información de sección (S1, S2), inclúyela en nombreCurso
-                
-                Responde SOLO con el JSON, sin markdown ni explicaciones.
             """.trimIndent()
 
-            val response = llamarGeminiAPI(imagenBase64, extraccionPrompt)
+            val response = llamarGeminiAPI(imagenOptimizada, prompt)
             parsearRespuestaHorario(response)
 
         } catch (e: Exception) {
             Log.e(TAG, "Error procesando imagen", e)
-            e.printStackTrace()
             ResultadoHorarioIA(
                 exito = false,
                 clases = emptyList(),
                 confianza = 0.0,
-                mensaje = "Error al procesar la imagen: ${e.message}"
+                mensaje = """
+                    ❌ Error al procesar la imagen
+                    
+                    ${e.message}
+                    
+                    Posibles causas:
+                    • Problema de conexión a internet
+                    • API Key inválida o sin cuota
+                    • Imagen muy grande o poco clara
+                    • Formato de horario no reconocible
+                    
+                    Sugerencias:
+                    ✓ Verifica tu conexión a internet
+                    ✓ Asegúrate de que la API Key sea válida
+                    ✓ Toma una foto más clara del horario
+                    ✓ Verifica que sea un horario académico estándar
+                """.trimIndent()
             )
         }
     }
 
-    private fun validarFormatoHorario(response: String): ValidacionHorario {
+    /**
+     * Optimiza la imagen reduciéndola y comprimiéndola
+     */
+    private fun optimizarImagen(imagenBase64: String): String {
         return try {
-            val jsonResponse = JSONObject(response)
+            // Decodificar imagen
+            val imageBytes = Base64.decode(imagenBase64, Base64.DEFAULT)
+            val bitmap = android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
 
-            if (jsonResponse.has("error")) {
-                return ValidacionHorario(
-                    esValido = false,
-                    razon = "Error al validar: ${jsonResponse.getJSONObject("error").getString("message")}"
-                )
-            }
-
-            val candidates = jsonResponse.getJSONArray("candidates")
-            if (candidates.length() == 0) {
-                return ValidacionHorario(false, "No se pudo analizar la imagen")
-            }
-
-            val content = candidates.getJSONObject(0).getJSONObject("content")
-            val parts = content.getJSONArray("parts")
-            val textoRespuesta = parts.getJSONObject(0).getString("text")
-
-            val jsonLimpio = textoRespuesta
-                .replace("```json", "")
-                .replace("```", "")
-                .trim()
-
-            val datos = JSONObject(jsonLimpio)
-
-            val esValido = datos.optBoolean("es_horario_valido", false)
-            val razon = datos.optString("razon", "No se pudo determinar")
-            val tieneModulos = datos.optBoolean("tiene_modulos", false)
-            val tieneDias = datos.optBoolean("tiene_dias", false)
-            val tieneHorarios = datos.optBoolean("tiene_horarios", false)
-
-            ValidacionHorario(
-                esValido = esValido && tieneModulos && tieneDias && tieneHorarios,
-                razon = if (esValido) razon else buildString {
-                    append(razon)
-                    if (!tieneModulos) append("\n• Faltan módulos numerados")
-                    if (!tieneDias) append("\n• Faltan días de la semana")
-                    if (!tieneHorarios) append("\n• Faltan horarios de los módulos")
-                }
+            // Calcular nuevo tamaño manteniendo proporción
+            val ratio = Math.min(
+                MAX_IMAGE_SIZE.toFloat() / bitmap.width,
+                MAX_IMAGE_SIZE.toFloat() / bitmap.height
             )
+
+            val newWidth = (bitmap.width * ratio).toInt()
+            val newHeight = (bitmap.height * ratio).toInt()
+
+            // Redimensionar si es necesario
+            val resizedBitmap = if (ratio < 1.0f) {
+                Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+            } else {
+                bitmap
+            }
+
+            // Comprimir a JPEG
+            val outputStream = ByteArrayOutputStream()
+            resizedBitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, outputStream)
+            val compressedBytes = outputStream.toByteArray()
+
+            // Convertir a Base64
+            Base64.encodeToString(compressedBytes, Base64.NO_WRAP)
 
         } catch (e: Exception) {
-            Log.e(TAG, "Error validando formato", e)
-            ValidacionHorario(
-                esValido = false,
-                razon = "No se pudo validar la imagen. Asegúrate de que sea un horario académico claro."
-            )
+            Log.w(TAG, "No se pudo optimizar imagen, usando original", e)
+            imagenBase64
         }
     }
 
+    /**
+     * Llama a la API de Gemini probando múltiples modelos
+     */
     private fun llamarGeminiAPI(imagenBase64: String, prompt: String): String {
-        // Usar solo gemini-1.5-flash que es el modelo que funciona
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+        val modelos = listOf(
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-flash",
+            "gemini-pro-vision"
+        )
 
-        Log.d(TAG, "Usando modelo: gemini-1.5-flash")
-        return intentarLlamadaAPI(url, imagenBase64, prompt)
+        var ultimoError = ""
+
+        for (modelo in modelos) {
+            try {
+                Log.d(TAG, "Probando modelo: $modelo")
+                val url = "https://generativelanguage.googleapis.com/v1beta/models/$modelo:generateContent?key=$apiKey"
+
+                return llamarAPIConModelo(url, imagenBase64, prompt)
+            } catch (e: Exception) {
+                ultimoError = e.message ?: "Error desconocido"
+                Log.w(TAG, "Falló $modelo: $ultimoError")
+
+                // Si no es 404, lanzar error inmediatamente
+                if (!ultimoError.contains("404")) {
+                    throw e
+                }
+                // Si es 404, continuar con el siguiente modelo
+            }
+        }
+
+        throw Exception("⚠️ Ningún modelo funcionó.\n\n" +
+                "Último error: $ultimoError\n\n" +
+                "Posibles causas:\n" +
+                "• API Key inválida o expirada\n" +
+                "• Sin cuota disponible\n" +
+                "• Región no soportada\n\n" +
+                "Solución:\n" +
+                "1. Ve a https://aistudio.google.com/app/apikey\n" +
+                "2. Crea una nueva API Key\n" +
+                "3. Copia y pega en MainActivity.kt")
     }
 
-    private fun intentarLlamadaAPI(url: String, imagenBase64: String, prompt: String): String {
+    private fun llamarAPIConModelo(url: String, imagenBase64: String, prompt: String): String {
+        Log.d(TAG, "Llamando a: $url")
+
         val requestBody = JSONObject().apply {
             put("contents", JSONArray().apply {
                 put(JSONObject().apply {
                     put("parts", JSONArray().apply {
-                        // Parte de texto
-                        put(JSONObject().apply {
-                            put("text", prompt)
-                        })
-                        // Parte de imagen
+                        put(JSONObject().apply { put("text", prompt) })
                         put(JSONObject().apply {
                             put("inline_data", JSONObject().apply {
                                 put("mime_type", "image/jpeg")
@@ -264,71 +223,81 @@ class HorarioIAService(private val apiKey: String) {
                 })
             })
             put("generationConfig", JSONObject().apply {
-                put("temperature", 0.1)  // Más determinista
-                put("topK", 10)          // Menos variabilidad
-                put("topP", 0.5)         // Más preciso
-                put("maxOutputTokens", 8192)  // Más espacio para respuestas largas
+                put("temperature", 0.1)
+                put("topK", 10)
+                put("topP", 0.5)
+                put("maxOutputTokens", 4096)
             })
             put("safetySettings", JSONArray().apply {
-                put(JSONObject().apply {
-                    put("category", "HARM_CATEGORY_HARASSMENT")
-                    put("threshold", "BLOCK_NONE")
-                })
-                put(JSONObject().apply {
-                    put("category", "HARM_CATEGORY_HATE_SPEECH")
-                    put("threshold", "BLOCK_NONE")
-                })
-                put(JSONObject().apply {
-                    put("category", "HARM_CATEGORY_SEXUALLY_EXPLICIT")
-                    put("threshold", "BLOCK_NONE")
-                })
-                put(JSONObject().apply {
-                    put("category", "HARM_CATEGORY_DANGEROUS_CONTENT")
-                    put("threshold", "BLOCK_NONE")
-                })
+                listOf(
+                    "HARM_CATEGORY_HARASSMENT",
+                    "HARM_CATEGORY_HATE_SPEECH",
+                    "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "HARM_CATEGORY_DANGEROUS_CONTENT"
+                ).forEach { category ->
+                    put(JSONObject().apply {
+                        put("category", category)
+                        put("threshold", "BLOCK_NONE")
+                    })
+                }
             })
         }.toString()
-
-        Log.d(TAG, "Request body size: ${requestBody.length} characters")
 
         val request = Request.Builder()
             .url(url)
             .post(requestBody.toRequestBody("application/json".toMediaType()))
-            .addHeader("Content-Type", "application/json")
             .build()
 
+        Log.d(TAG, "Enviando request (${requestBody.length} bytes)")
+
         val response = client.newCall(request).execute()
-        val responseBody = response.body?.string()
 
         Log.d(TAG, "Response code: ${response.code}")
 
         if (!response.isSuccessful) {
-            throw Exception("API Error: ${response.code} - ${response.message}\nBody: ${responseBody?.take(200)}")
+            val errorBody = response.body?.string()
+            Log.e(TAG, "API Error: $errorBody")
+
+            val mensajeError = when (response.code) {
+                400 -> "Solicitud inválida. Verifica el formato de la imagen."
+                401 -> "API Key inválida. Ve a https://aistudio.google.com/app/apikey"
+                403 -> "Acceso denegado. Verifica los permisos de tu API Key."
+                404 -> "Modelo no encontrado. Probando otro modelo..."
+                429 -> "Límite de solicitudes alcanzado. Espera 1 minuto."
+                500, 503 -> "Error en el servidor de Google. Intenta más tarde."
+                else -> "Error ${response.code}: ${response.message}"
+            }
+
+            throw Exception(mensajeError)
         }
 
-        return responseBody ?: throw Exception("Respuesta vacía")
+        return response.body?.string() ?: throw Exception("Respuesta vacía del servidor")
     }
 
+    /**
+     * Parsea la respuesta de la API
+     */
     private fun parsearRespuestaHorario(response: String): ResultadoHorarioIA {
         try {
             val jsonResponse = JSONObject(response)
 
             if (jsonResponse.has("error")) {
                 val error = jsonResponse.getJSONObject("error")
-                throw Exception("API Error: ${error.getString("message")}")
+                throw Exception(error.getString("message"))
             }
 
             val candidates = jsonResponse.getJSONArray("candidates")
             if (candidates.length() == 0) {
-                throw Exception("No se recibieron candidatos en la respuesta")
+                throw Exception("No se generó respuesta")
             }
 
             val content = candidates.getJSONObject(0).getJSONObject("content")
             val parts = content.getJSONArray("parts")
             val textoRespuesta = parts.getJSONObject(0).getString("text")
 
-            Log.d(TAG, "Texto respuesta IA: $textoRespuesta")
+            Log.d(TAG, "Respuesta IA: ${textoRespuesta.take(200)}...")
 
+            // Limpiar markdown
             val jsonLimpio = textoRespuesta
                 .replace("```json", "")
                 .replace("```", "")
@@ -336,77 +305,69 @@ class HorarioIAService(private val apiKey: String) {
 
             val datos = JSONObject(jsonLimpio)
             val clasesArray = datos.getJSONArray("clases")
-            val confianza = datos.optDouble("confianza", 75.0)
 
             val clases = mutableListOf<ClaseHorario>()
             for (i in 0 until clasesArray.length()) {
-                val claseObj = clasesArray.getJSONObject(i)
-
                 try {
-                    val nombreCurso = claseObj.getString("nombreCurso")
-                    val modulo = claseObj.optInt("modulo", 0)
+                    val obj = clasesArray.getJSONObject(i)
 
                     val clase = ClaseHorario(
                         id = "clase_${System.currentTimeMillis()}_$i",
                         idCurso = "",
-                        nombreCurso = nombreCurso,
-                        sala = claseObj.optString("sala", "Por definir"),
-                        profesor = claseObj.optString("profesor", "Por definir"),
-                        diaSemana = DiaSemana.fromNumero(claseObj.getInt("dia")),
-                        horaInicio = claseObj.getString("horaInicio"),
-                        horaFin = claseObj.getString("horaFin"),
-                        tipoClase = parsearTipoClase(claseObj.optString("tipo", "CATEDRA")),
-                        color = generarColorPorCurso(nombreCurso)
+                        nombreCurso = obj.getString("nombreCurso"),
+                        sala = obj.optString("sala", "Por definir"),
+                        profesor = obj.optString("profesor", "Por definir"),
+                        diaSemana = DiaSemana.fromNumero(obj.getInt("dia")),
+                        horaInicio = obj.getString("horaInicio"),
+                        horaFin = obj.getString("horaFin"),
+                        tipoClase = parsearTipo(obj.optString("tipo", "CATEDRA")),
+                        color = generarColor(obj.getString("nombreCurso"))
                     )
                     clases.add(clase)
-                    Log.d(TAG, "Clase parseada: ${clase.nombreCurso} - Módulo $modulo (${clase.horaInicio}-${clase.horaFin})")
+                    Log.d(TAG, "✓ Clase: ${clase.nombreCurso} ${clase.diaSemana.nombreCorto} ${clase.horaInicio}")
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error parseando clase $i", e)
-                    e.printStackTrace()
+                    Log.w(TAG, "Error parseando clase $i", e)
                 }
             }
 
             return ResultadoHorarioIA(
                 exito = clases.isNotEmpty(),
                 clases = clases,
-                confianza = confianza,
-                mensaje = if (clases.isNotEmpty())
-                    "✅ Se encontraron ${clases.size} clases en el horario"
-                else
-                    "⚠️ No se encontraron clases en la imagen. Verifica que sea un horario válido."
+                confianza = if (clases.size >= 10) 85.0 else 70.0,
+                mensaje = when {
+                    clases.isEmpty() -> "No se encontraron clases. Verifica que sea un horario válido."
+                    clases.size < 5 -> "Se encontraron ${clases.size} clases. Puede que falten algunas."
+                    else -> "✓ ${clases.size} clases detectadas correctamente"
+                }
             )
 
         } catch (e: Exception) {
             Log.e(TAG, "Error parseando respuesta", e)
-            e.printStackTrace()
             return ResultadoHorarioIA(
                 exito = false,
                 clases = emptyList(),
                 confianza = 0.0,
-                mensaje = "Error al extraer clases: ${e.message}"
+                mensaje = "Error al interpretar la respuesta: ${e.message}"
             )
         }
     }
 
-    private fun parsearTipoClase(tipo: String): TipoClase {
+    private fun parsearTipo(tipo: String): TipoClase {
         return when {
-            tipo.contains("LABORATORIO", ignoreCase = true) ||
-                    tipo.contains("LAB", ignoreCase = true) -> TipoClase.LABORATORIO
-            tipo.contains("AYUDANTIA", ignoreCase = true) -> TipoClase.AYUDANTIA
-            tipo.contains("TALLER", ignoreCase = true) -> TipoClase.TALLER
+            tipo.contains("LAB", ignoreCase = true) -> TipoClase.LABORATORIO
+            tipo.contains("AYUD", ignoreCase = true) -> TipoClase.AYUDANTIA
+            tipo.contains("TALL", ignoreCase = true) -> TipoClase.TALLER
             else -> TipoClase.CATEDRA
         }
     }
 
-    private fun generarColorPorCurso(nombreCurso: String): String {
-        // Genera un color consistente basado en el nombre del curso
-        val hash = nombreCurso.hashCode()
+    private fun generarColor(nombre: String): String {
         val colores = listOf(
             "#6200EE", "#03DAC6", "#FF6B6B", "#4ECDC4",
             "#45B7D1", "#FFA07A", "#98D8C8", "#F7DC6F",
             "#BB8FCE", "#85C1E2", "#F8B739", "#52B788"
         )
-        return colores[Math.abs(hash) % colores.size]
+        return colores[Math.abs(nombre.hashCode()) % colores.size]
     }
 
     fun convertirABase64(bytes: ByteArray): String {
