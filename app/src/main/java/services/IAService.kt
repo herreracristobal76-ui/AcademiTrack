@@ -60,11 +60,33 @@ class IAService(private val apiKey: String) {
     }
 
     private fun llamarGeminiAPI(imagenBase64: String, prompt: String): String {
-        // Solo usar gemini-1.5-flash que es el modelo que funciona
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+        // Intentar con diferentes versiones del modelo
+        val modelos = listOf(
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-flash",
+            "gemini-pro-vision"
+        )
 
-        Log.d(TAG, "Usando modelo: gemini-1.5-flash")
-        return intentarLlamadaAPI(url, imagenBase64, prompt)
+        var ultimoError = ""
+
+        for (modelo in modelos) {
+            try {
+                val url = "https://generativelanguage.googleapis.com/v1beta/models/$modelo:generateContent?key=$apiKey"
+                Log.d(TAG, "Intentando con modelo: $modelo")
+                return intentarLlamadaAPI(url, imagenBase64, prompt)
+            } catch (e: Exception) {
+                ultimoError = e.message ?: "Error desconocido"
+                Log.w(TAG, "Falló modelo $modelo: $ultimoError")
+
+                // Si es un error 404, continuar con el siguiente modelo
+                if (ultimoError.contains("404")) continue
+                // Si es otro error, lanzarlo inmediatamente
+                else throw e
+            }
+        }
+
+        throw Exception("Ningún modelo funcionó. Último error: $ultimoError\n\n" +
+                "Verifica tu API Key en: https://aistudio.google.com/app/apikey")
     }
 
     private fun intentarLlamadaAPI(url: String, imagenBase64: String, prompt: String): String {

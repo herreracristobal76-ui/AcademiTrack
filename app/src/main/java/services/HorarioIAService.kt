@@ -15,8 +15,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Servicio para procesar imágenes de horarios con IA (Google Gemini)
- *
- * UBICACIÓN: app/src/main/java/com/academitrack/app/services/HorarioIAService.kt
+ * VERSIÓN ACTUALIZADA - Solo usa gemini-1.5-flash
  */
 class HorarioIAService(private val apiKey: String) {
 
@@ -99,39 +98,75 @@ class HorarioIAService(private val apiKey: String) {
                 Cursos del estudiante:
                 $cursosInfo
                 
-                INSTRUCCIONES IMPORTANTES:
+                INSTRUCCIONES CRÍTICAS - SIGUE EXACTAMENTE:
                 
-                1. Lee CUIDADOSAMENTE los módulos y sus horarios en la primera columna
-                2. Para CADA clase en CADA día, usa el horario del MÓDULO correspondiente
-                3. NO inventes horarios, usa EXACTAMENTE los que aparecen en la columna de módulos
+                1. IDENTIFICACIÓN DE MÓDULOS:
+                   - Busca la columna izquierda que dice "Módulo" o "Bloque"
+                   - Cada fila tiene un número (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, etc.)
+                   - Cada módulo tiene su HORARIO EXACTO (ej: 08:30-09:30, 09:35-10:35)
                 
-                Extrae TODAS las clases y devuelve un JSON con este formato EXACTO:
+                2. LECTURA DE HORARIOS:
+                   - LEE los horarios de la columna "Horario" o similar
+                   - Formato típico: "HH:mm - HH:mm" o "HH:mm-HH:mm"
+                   - Ejemplos: "08:30-09:30", "11:55-12:55", "14:10-15:10"
+                   - USA ESTOS HORARIOS EXACTOS, NO inventes otros
+                
+                3. LECTURA DE CLASES:
+                   - Para cada día (Lunes, Martes, Miércoles, Jueves, Viernes)
+                   - Lee de ARRIBA hacia ABAJO siguiendo los módulos
+                   - Si una celda contiene texto, extrae:
+                     * Nombre del curso (puede incluir código como INF-215)
+                     * Sala (ej: F-411, Lab DCI03, Sala 201)
+                     * Profesor (si está visible)
+                     * Tipo: LABORATORIO si dice "Lab" o "Laboratorio", sino CATEDRA
+                
+                4. FORMATO DE RESPUESTA:
+                   Devuelve un JSON con este formato EXACTO:
+                   {
+                       "clases": [
+                           {
+                               "nombreCurso": "nombre completo incluyendo código si está",
+                               "codigo": "código extraído (ej: INF-215) o vacío",
+                               "sala": "sala exacta como aparece",
+                               "profesor": "nombre del profesor o 'Por definir'",
+                               "dia": número 1-5 (1=Lunes, 5=Viernes),
+                               "modulo": número del módulo (1, 2, 3...),
+                               "horaInicio": "HH:mm del inicio EXACTO del módulo",
+                               "horaFin": "HH:mm del fin EXACTO del módulo",
+                               "tipo": "CATEDRA" o "LABORATORIO"
+                           }
+                       ],
+                       "confianza": número 0-100
+                   }
+                
+                EJEMPLOS DE EXTRACCIÓN CORRECTA:
+                
+                Si el horario muestra:
+                - Módulo 1: 08:30-09:30
+                - Lunes módulo 1: "INF-215 Circuitos / F-411 / Prof. García"
+                
+                Debes crear:
                 {
-                    "clases": [
-                        {
-                            "nombreCurso": "nombre completo del curso (ej: INF - 215 Circuitos digitales S2)",
-                            "codigo": "código del curso (ej: INF-215)",
-                            "sala": "sala exacta (ej: Laboratorio DCI03, Sala F-411)",
-                            "profesor": "nombre completo del profesor",
-                            "dia": número del 1 al 5 (1=Lunes, 2=Martes, 3=Miércoles, 4=Jueves, 5=Viernes),
-                            "modulo": número del módulo (1, 2, 3, etc.),
-                            "horaInicio": "HH:mm del inicio del módulo",
-                            "horaFin": "HH:mm del fin del módulo",
-                            "tipo": "CATEDRA" o "LABORATORIO" o "AYUDANTIA" o "TALLER"
-                        }
-                    ],
-                    "confianza": número del 0 al 100
+                    "nombreCurso": "INF-215 Circuitos",
+                    "codigo": "INF-215",
+                    "sala": "F-411",
+                    "profesor": "Prof. García",
+                    "dia": 1,
+                    "modulo": 1,
+                    "horaInicio": "08:30",
+                    "horaFin": "09:30",
+                    "tipo": "CATEDRA"
                 }
                 
-                REGLAS CRÍTICAS:
-                - Si una clase está en el módulo 1 (08:30-09:30), usa horaInicio: "08:30" y horaFin: "09:30"
-                - Si una clase está en el módulo 3 (10:50-11:50), usa horaInicio: "10:50" y horaFin: "11:50"
-                - Si un curso aparece en múltiples días (como INF-215 en Lunes y Martes), créalos como clases separadas
-                - El tipo LABORATORIO solo si dice explícitamente "Laboratorio" o "Lab"
-                - Usa formato 24 horas (ej: "14:30" no "2:30 PM")
-                - Si hay información de Sección (S1, S2), inclúyela en nombreCurso
+                REGLAS IMPORTANTES:
+                - Si un curso está en VARIOS DÍAS, créalo como CLASES SEPARADAS
+                - Si no encuentras el profesor, usa "Por definir"
+                - Si no encuentras la sala, usa "Por definir"
+                - NUNCA inventes horarios, usa SOLO los del horario
+                - Formato 24 horas SIEMPRE (14:30 NO 2:30 PM)
+                - Si hay información de sección (S1, S2), inclúyela en nombreCurso
                 
-                Responde SOLO con el JSON, sin texto adicional.
+                Responde SOLO con el JSON, sin markdown ni explicaciones.
             """.trimIndent()
 
             val response = llamarGeminiAPI(imagenBase64, extraccionPrompt)
@@ -202,26 +237,11 @@ class HorarioIAService(private val apiKey: String) {
     }
 
     private fun llamarGeminiAPI(imagenBase64: String, prompt: String): String {
-        // Modelos soportados de Gemini con imágenes
-        val urls = listOf(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey",
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=$apiKey",
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key=$apiKey"
-        )
+        // Usar solo gemini-1.5-flash que es el modelo que funciona
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
 
-        var lastException: Exception? = null
-
-        for (url in urls) {
-            try {
-                Log.d(TAG, "Intentando con URL: $url")
-                return intentarLlamadaAPI(url, imagenBase64, prompt)
-            } catch (e: Exception) {
-                Log.w(TAG, "Falló con URL: $url - ${e.message}")
-                lastException = e
-            }
-        }
-
-        throw lastException ?: Exception("No se pudo conectar con la API de Gemini")
+        Log.d(TAG, "Usando modelo: gemini-1.5-flash")
+        return intentarLlamadaAPI(url, imagenBase64, prompt)
     }
 
     private fun intentarLlamadaAPI(url: String, imagenBase64: String, prompt: String): String {
@@ -244,10 +264,10 @@ class HorarioIAService(private val apiKey: String) {
                 })
             })
             put("generationConfig", JSONObject().apply {
-                put("temperature", 0.2)
-                put("topK", 20)
-                put("topP", 0.8)
-                put("maxOutputTokens", 4096)
+                put("temperature", 0.1)  // Más determinista
+                put("topK", 10)          // Menos variabilidad
+                put("topP", 0.5)         // Más preciso
+                put("maxOutputTokens", 8192)  // Más espacio para respuestas largas
             })
             put("safetySettings", JSONArray().apply {
                 put(JSONObject().apply {
