@@ -22,11 +22,6 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 
-/**
- * Pantalla de Calendario Mensual con vista de clases
- *
- * UBICACIÓN: app/src/main/java/com/academitrack/app/ui/CalendarioMensualScreen.kt
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarioMensualScreen(
@@ -35,10 +30,15 @@ fun CalendarioMensualScreen(
     cursos: List<Curso>,
     onVolverClick: () -> Unit,
     onRegistrarHorario: () -> Unit,
-    onVerHorarioSemanal: () -> Unit
+    onVerHorarioSemanal: () -> Unit,
+    onLimpiarHorario: () -> Unit = {}
 ) {
     var mesActual by remember { mutableStateOf(Calendar.getInstance()) }
     var diaSeleccionado by remember { mutableStateOf<Calendar?>(null) }
+    var mostrarMenuOpciones by remember { mutableStateOf(false) }
+    var mostrarDialogoLimpiar by remember { mutableStateOf(false) }
+
+    val tieneHorarios = gestorHorario.obtenerTodasClases().isNotEmpty()
 
     Scaffold(
         topBar = {
@@ -56,10 +56,30 @@ fun CalendarioMensualScreen(
                     IconButton(onClick = onRegistrarHorario) {
                         Icon(Icons.Default.Add, "Registrar Horario")
                     }
+
+                    if (tieneHorarios) {
+                        IconButton(onClick = { mostrarMenuOpciones = true }) {
+                            Icon(Icons.Default.MoreVert, "Opciones")
+                        }
+                        DropdownMenu(
+                            expanded = mostrarMenuOpciones,
+                            onDismissRequest = { mostrarMenuOpciones = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("🗑️ Limpiar todo el horario") },
+                                onClick = {
+                                    mostrarMenuOpciones = false
+                                    mostrarDialogoLimpiar = true
+                                }
+                            )
+                        }
+                    }
                 }
             )
         }
     ) { paddingValues ->
+        // ... resto del contenido igual
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -102,7 +122,6 @@ fun CalendarioMensualScreen(
                 }
             }
 
-            // Calendario
             CalendarioMensual(
                 mes = mesActual,
                 gestorHorario = gestorHorario,
@@ -110,7 +129,6 @@ fun CalendarioMensualScreen(
                 onDiaClick = { dia -> diaSeleccionado = dia }
             )
 
-            // Detalles del día seleccionado
             diaSeleccionado?.let { dia ->
                 DetallesDiaCard(
                     dia = dia,
@@ -122,225 +140,48 @@ fun CalendarioMensualScreen(
             }
         }
     }
-}
 
-@Composable
-fun CalendarioMensual(
-    mes: Calendar,
-    gestorHorario: GestorHorario,
-    gestorAsistencia: GestorAsistencia,
-    onDiaClick: (Calendar) -> Unit
-) {
-    val primerDia = (mes.clone() as Calendar).apply {
-        set(Calendar.DAY_OF_MONTH, 1)
-    }
-    val ultimoDia = mes.getActualMaximum(Calendar.DAY_OF_MONTH)
-    val primerDiaSemana = primerDia.get(Calendar.DAY_OF_WEEK)
-
-    // Ajustar para que Lunes sea el primer día
-    val offset = if (primerDiaSemana == Calendar.SUNDAY) 6 else primerDiaSemana - 2
-
-    Column(modifier = Modifier.padding(horizontal = 8.dp)) {
-        // Cabecera con días de la semana
-        Row(modifier = Modifier.fillMaxWidth()) {
-            listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom").forEach { dia ->
-                Text(
-                    text = dia,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
+    // Diálogo confirmar limpiar horario
+    if (mostrarDialogoLimpiar) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoLimpiar = false },
+            icon = {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
                 )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Días del mes
-        var diaActual = 1
-        for (semana in 0..5) {
-            if (diaActual > ultimoDia) break
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                for (diaSemana in 0..6) {
-                    if (semana == 0 && diaSemana < offset || diaActual > ultimoDia) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    } else {
-                        val diaCalendario = (mes.clone() as Calendar).apply {
-                            set(Calendar.DAY_OF_MONTH, diaActual)
-                        }
-
-                        DiaCelda(
-                            dia = diaActual,
-                            esHoy = esHoy(diaCalendario),
-                            tieneClases = tieneClasesEseDia(diaCalendario, gestorHorario),
-                            porcentajeAsistencia = obtenerAsistenciaDia(diaCalendario, gestorAsistencia),
-                            onClick = { onDiaClick(diaCalendario) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        diaActual++
-                    }
+            },
+            title = { Text("¿Limpiar todo el horario?") },
+            text = {
+                Text(
+                    """
+                    Se eliminarán todas las clases registradas (${gestorHorario.obtenerTodasClases().size} clases).
+                    
+                    Esta acción no se puede deshacer.
+                    
+                    Los cursos no se eliminarán, solo las clases del horario.
+                    """.trimIndent()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onLimpiarHorario()
+                        mostrarDialogoLimpiar = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Limpiar Todo")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoLimpiar = false }) {
+                    Text("Cancelar")
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun DiaCelda(
-    dia: Int,
-    esHoy: Boolean,
-    tieneClases: Boolean,
-    porcentajeAsistencia: Float?,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .aspectRatio(1f)
-            .padding(2.dp)
-            .background(
-                color = when {
-                    esHoy -> MaterialTheme.colorScheme.primaryContainer
-                    porcentajeAsistencia != null && porcentajeAsistencia < 0.75f ->
-                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-                    tieneClases -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
-                    else -> Color.Transparent
-                },
-                shape = MaterialTheme.shapes.small
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = dia.toString(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (esHoy) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurface
-            )
-
-            if (tieneClases) {
-                Box(
-                    modifier = Modifier
-                        .size(4.dp)
-                        .background(
-                            MaterialTheme.colorScheme.primary,
-                            CircleShape
-                        )
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun DetallesDiaCard(
-    dia: Calendar,
-    gestorHorario: GestorHorario,
-    gestorAsistencia: GestorAsistencia,
-    cursos: List<Curso>,
-    onCerrar: () -> Unit
-) {
-    val dateFormat = SimpleDateFormat("EEEE, d 'de' MMMM", Locale("es", "ES"))
-    val diaSemana = DiaSemana.fromCalendar(dia.get(Calendar.DAY_OF_WEEK))
-    val clases = gestorHorario.obtenerClasesPorDia(diaSemana)
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = dateFormat.format(dia.time),
-                    style = MaterialTheme.typography.titleMedium
-                )
-                IconButton(onClick = onCerrar) {
-                    Icon(Icons.Default.Close, "Cerrar")
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (clases.isEmpty()) {
-                Text(
-                    text = "No hay clases programadas este día",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                clases.forEach { clase ->
-                    ClaseItem(clase)
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ClaseItem(clase: ClaseHorario) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(android.graphics.Color.parseColor(clase.color))
-                .copy(alpha = 0.2f)
         )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = clase.nombreCurso,
-                    style = MaterialTheme.typography.titleSmall
-                )
-                Text(
-                    text = clase.obtenerHorarioCompleto(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "${clase.sala} • ${clase.profesor}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Text(
-                text = clase.tipoClase.descripcion,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
     }
-}
-
-fun esHoy(dia: Calendar): Boolean {
-    val hoy = Calendar.getInstance()
-    return dia.get(Calendar.YEAR) == hoy.get(Calendar.YEAR) &&
-            dia.get(Calendar.DAY_OF_YEAR) == hoy.get(Calendar.DAY_OF_YEAR)
-}
-
-fun tieneClasesEseDia(dia: Calendar, gestorHorario: GestorHorario): Boolean {
-    val diaSemana = DiaSemana.fromCalendar(dia.get(Calendar.DAY_OF_WEEK))
-    return gestorHorario.obtenerClasesPorDia(diaSemana).isNotEmpty()
-}
-
-fun obtenerAsistenciaDia(dia: Calendar, gestorAsistencia: GestorAsistencia): Float? {
-    // Implementar lógica para obtener asistencia del día
-    return null
 }

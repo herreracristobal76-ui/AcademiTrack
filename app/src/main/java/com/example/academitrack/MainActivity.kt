@@ -296,7 +296,15 @@ fun AcademiTrackApp(
                 cursos = cursos.filter { it.estaActivo() },
                 onVolverClick = { pantallaActual = "cursos" },
                 onRegistrarHorario = { pantallaActual = "seleccionar_semestre" },
-                onVerHorarioSemanal = { pantallaActual = "horario_semanal" }
+                onVerHorarioSemanal = { pantallaActual = "horario_semanal" },
+                onLimpiarHorario = {
+                    // Limpiar todas las clases
+                    gestorHorario.obtenerTodasClases().forEach { clase ->
+                        gestorHorario.eliminarClase(clase.id)
+                    }
+                    // Guardar cambios
+                    persistencia.guardarHorarios(emptyList())
+                }
             )
         }
 
@@ -304,7 +312,14 @@ fun AcademiTrackApp(
             HorarioSemanalScreen(
                 gestorHorario = gestorHorario,
                 onVolverClick = { pantallaActual = "calendario_mensual" },
-                onRegistrarHorario = { pantallaActual = "seleccionar_semestre" }
+                onRegistrarHorario = { pantallaActual = "seleccionar_semestre" },
+                onEliminarClase = { clase ->
+                    // Eliminar la clase del gestor
+                    gestorHorario.eliminarClase(clase.id)
+
+                    // Guardar cambios en persistencia
+                    persistencia.guardarHorarios(gestorHorario.obtenerTodasClases())
+                }
             )
         }
 

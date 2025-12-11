@@ -16,8 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.academitrack.app.domain.*
 
 /**
- * Pantalla de Horario Semanal
- *
+ * Pantalla de Horario Semanal con opción de eliminar
  * UBICACIÓN: app/src/main/java/com/academitrack/app/ui/HorarioSemanalScreen.kt
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -25,10 +24,13 @@ import com.academitrack.app.domain.*
 fun HorarioSemanalScreen(
     gestorHorario: GestorHorario,
     onVolverClick: () -> Unit,
-    onRegistrarHorario: () -> Unit
+    onRegistrarHorario: () -> Unit,
+    onEliminarClase: (ClaseHorario) -> Unit = {}
 ) {
     val todasClases = gestorHorario.obtenerTodasClases()
     val proximaClase = gestorHorario.obtenerProximaClase()
+    var mostrarDialogoEliminar by remember { mutableStateOf<ClaseHorario?>(null) }
+    var mostrarMenuOpciones by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -42,6 +44,32 @@ fun HorarioSemanalScreen(
                 actions = {
                     IconButton(onClick = onRegistrarHorario) {
                         Icon(Icons.Default.Add, "Registrar Horario")
+                    }
+                    if (todasClases.isNotEmpty()) {
+                        IconButton(onClick = { mostrarMenuOpciones = true }) {
+                            Icon(Icons.Default.MoreVert, "Opciones")
+                        }
+                        DropdownMenu(
+                            expanded = mostrarMenuOpciones,
+                            onDismissRequest = { mostrarMenuOpciones = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("🗑️ Eliminar todo el horario") },
+                                onClick = {
+                                    mostrarMenuOpciones = false
+                                    mostrarDialogoEliminar = ClaseHorario(
+                                        id = "all",
+                                        idCurso = "",
+                                        nombreCurso = "TODOS",
+                                        sala = "",
+                                        profesor = "",
+                                        diaSemana = DiaSemana.LUNES,
+                                        horaInicio = "",
+                                        horaFin = ""
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
             )
@@ -141,23 +169,93 @@ fun HorarioSemanalScreen(
                         }
 
                         items(clasesDia) { clase ->
-                            ClaseHorarioCard(clase)
+                            ClaseHorarioCardConEliminar(
+                                clase = clase,
+                                onEliminar = { mostrarDialogoEliminar = clase }
+                            )
                         }
                     }
                 }
             }
         }
     }
+
+    // Diálogo de confirmación para eliminar
+    mostrarDialogoEliminar?.let { clase ->
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoEliminar = null },
+            icon = {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = {
+                Text(
+                    if (clase.id == "all") "¿Eliminar todo el horario?"
+                    else "¿Eliminar esta clase?"
+                )
+            },
+            text = {
+                Text(
+                    if (clase.id == "all") {
+                        """
+                        Se eliminarán todas las clases registradas (${todasClases.size} clases).
+                        
+                        Esta acción no se puede deshacer.
+                        """.trimIndent()
+                    } else {
+                        """
+                        Clase: ${clase.nombreCurso}
+                        ${clase.diaSemana.nombre} ${clase.obtenerHorarioCompleto()}
+                        
+                        Esta acción no se puede deshacer.
+                        """.trimIndent()
+                    }
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (clase.id == "all") {
+                            todasClases.forEach { onEliminarClase(it) }
+                        } else {
+                            onEliminarClase(clase)
+                        }
+                        mostrarDialogoEliminar = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoEliminar = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ClaseHorarioCard(clase: ClaseHorario) {
+fun ClaseHorarioCardConEliminar(
+    clase: ClaseHorario,
+    onEliminar: () -> Unit
+) {
+    var mostrarMenu by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = Color(android.graphics.Color.parseColor(clase.color))
                 .copy(alpha = 0.2f)
-        )
+        ),
+        onClick = { mostrarMenu = true }
     ) {
         Row(
             modifier = Modifier
@@ -243,6 +341,30 @@ fun ClaseHorarioCard(clase: ClaseHorario) {
                         text = clase.profesor,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // Menú de opciones
+            Box {
+                IconButton(onClick = { mostrarMenu = true }) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = "Opciones",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = mostrarMenu,
+                    onDismissRequest = { mostrarMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("🗑️ Eliminar clase") },
+                        onClick = {
+                            mostrarMenu = false
+                            onEliminar()
+                        }
                     )
                 }
             }
