@@ -13,6 +13,16 @@ class GestorAsistencia {
         } else false
     }
 
+    fun eliminarAsistencia(idAsistencia: String): Boolean {
+        return asistencias.remove(idAsistencia) != null
+    }
+
+    fun actualizarEstadoAsistencia(idAsistencia: String, nuevoEstado: EstadoAsistencia): Boolean {
+        val asistencia = asistencias[idAsistencia] ?: return false
+        asistencia.setEstado(nuevoEstado)
+        return true
+    }
+
     fun calcularPorcentajeAsistencia(idCurso: String): Double {
         val asistenciasCurso = asistencias.values.filter {
             it.getIdCurso() == idCurso && it.cuentaParaPorcentaje()
@@ -48,7 +58,30 @@ class GestorAsistencia {
     fun obtenerFaltas(idCurso: String): List<Asistencia> {
         return asistencias.values.filter {
             it.getIdCurso() == idCurso && it.esFalta()
-        }
+        }.sortedByDescending { it.getFecha() }
+    }
+
+    fun obtenerAsistenciasPorCurso(idCurso: String): List<Asistencia> {
+        return asistencias.values.filter {
+            it.getIdCurso() == idCurso
+        }.sortedByDescending { it.getFecha() }
+    }
+
+    fun obtenerAsistenciasPorFecha(idCurso: String, fechaInicio: Long, fechaFin: Long): List<Asistencia> {
+        return asistencias.values.filter {
+            it.getIdCurso() == idCurso &&
+                    it.getFecha() >= fechaInicio &&
+                    it.getFecha() <= fechaFin
+        }.sortedBy { it.getFecha() }
+    }
+
+    fun obtenerTodasAsistencias(): Map<String, Asistencia> {
+        return asistencias.toMap()
+    }
+
+    fun cargarAsistencias(asistenciasCargadas: Map<String, Asistencia>) {
+        asistencias.clear()
+        asistencias.putAll(asistenciasCargadas)
     }
 }
 

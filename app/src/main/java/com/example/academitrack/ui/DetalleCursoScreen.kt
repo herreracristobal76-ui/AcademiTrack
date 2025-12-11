@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -20,8 +20,14 @@ fun DetalleCursoScreen(
     gestorAsistencia: GestorAsistencia,
     onVolverClick: () -> Unit,
     onAgregarNota: () -> Unit,
-    onAgregarConIA: () -> Unit = {}
-){
+    onAgregarConIA: () -> Unit,
+    onVerCalendario: () -> Unit,
+    onEditarCurso: () -> Unit,
+    onEliminarCurso: () -> Unit
+) {
+    var mostrarMenuOpciones by remember { mutableStateOf(false) }
+    var mostrarDialogoEliminar by remember { mutableStateOf(false) }
+
     val promedio = gestorNotas.calcularPromedioActual(curso.getId())
     val porcentajeAsistencia = gestorAsistencia.calcularPorcentajeAsistencia(curso.getId())
     val evaluaciones = gestorNotas.obtenerEvaluacionesPorCurso(curso.getId())
@@ -41,6 +47,30 @@ fun DetalleCursoScreen(
                     IconButton(onClick = onVolverClick) {
                         Icon(Icons.Default.ArrowBack, "Volver")
                     }
+                },
+                actions = {
+                    IconButton(onClick = { mostrarMenuOpciones = true }) {
+                        Icon(Icons.Default.MoreVert, "Opciones")
+                    }
+                    DropdownMenu(
+                        expanded = mostrarMenuOpciones,
+                        onDismissRequest = { mostrarMenuOpciones = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("✏️ Editar curso") },
+                            onClick = {
+                                mostrarMenuOpciones = false
+                                onEditarCurso()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("🗑️ Eliminar curso") },
+                            onClick = {
+                                mostrarMenuOpciones = false
+                                mostrarDialogoEliminar = true
+                            }
+                        )
+                    }
                 }
             )
         }
@@ -52,6 +82,43 @@ fun DetalleCursoScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = curso.getCodigo(),
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    text = "Nota mín: ${curso.getNotaMinimaAprobacion()}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                                Text(
+                                    text = "Asist. mín:",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Text(
+                                    text = "${curso.getPorcentajeAsistenciaMinimo()}%",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -123,6 +190,7 @@ fun DetalleCursoScreen(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
+                    onClick = onVerCalendario,
                     colors = CardDefaults.cardColors(
                         containerColor = if (porcentajeAsistencia >= curso.getPorcentajeAsistenciaMinimo())
                             MaterialTheme.colorScheme.primaryContainer
@@ -130,26 +198,36 @@ fun DetalleCursoScreen(
                             MaterialTheme.colorScheme.errorContainer
                     )
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "📅 Asistencia",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            text = "${String.format("%.1f", porcentajeAsistencia)}%",
-                            style = MaterialTheme.typography.displayMedium
-                        )
-                        Text(
-                            text = "${stats.clasesAsistidas} de ${stats.totalClases} clases",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        if (stats.faltas > 0) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "🔴 ${stats.faltas} faltas",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
+                                text = "📅 Asistencia",
+                                style = MaterialTheme.typography.titleMedium
                             )
+                            Text(
+                                text = "${String.format("%.1f", porcentajeAsistencia)}%",
+                                style = MaterialTheme.typography.displayMedium
+                            )
+                            Text(
+                                text = "${stats.clasesAsistidas} de ${stats.totalClases} clases",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            if (stats.faltas > 0) {
+                                Text(
+                                    text = "🔴 ${stats.faltas} faltas",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
+                        Icon(
+                            imageVector = Icons.Default.DateRange,
+                            contentDescription = "Ver calendario",
+                            modifier = Modifier.size(48.dp)
+                        )
                     }
                 }
             }
@@ -163,20 +241,24 @@ fun DetalleCursoScreen(
                         onClick = onAgregarConIA,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("📷 Con IA")
+                        Icon(Icons.Default.CameraAlt, null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("IA")
                     }
                     OutlinedButton(
                         onClick = onAgregarNota,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("✍️ Manual")
+                        Icon(Icons.Default.Edit, null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Manual")
                     }
                 }
             }
 
             item {
                 Text(
-                    text = "Evaluaciones",
+                    text = "Evaluaciones (${evaluaciones.size})",
                     style = MaterialTheme.typography.titleLarge
                 )
             }
@@ -184,17 +266,52 @@ fun DetalleCursoScreen(
             if (evaluaciones.isEmpty()) {
                 item {
                     Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text("No hay evaluaciones registradas")
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+                        ) {
+                            Text("📝 No hay evaluaciones registradas")
+                            Text(
+                                "Agrega tu primera evaluación",
+                                style = MaterialTheme.typography.bodySmall
+                            )
                         }
                     }
                 }
             } else {
-                items(evaluaciones) { eval ->
+                items(evaluaciones.sortedByDescending { it.getFecha() }) { eval ->
                     EvaluacionCard(eval)
                 }
             }
         }
+    }
+
+    if (mostrarDialogoEliminar) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoEliminar = false },
+            title = { Text("⚠️ Eliminar Curso") },
+            text = {
+                Text("¿Estás seguro de que quieres eliminar este curso? Se perderán todas las evaluaciones y registros de asistencia asociados.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onEliminarCurso()
+                        mostrarDialogoEliminar = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoEliminar = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }
 

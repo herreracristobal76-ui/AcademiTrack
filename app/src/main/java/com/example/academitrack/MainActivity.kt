@@ -3,6 +3,7 @@ package com.academitrack.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,75 +23,29 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         persistencia = PersistenciaLocal(this)
-        inicializarDatosEjemplo()
 
         setContent {
-            MaterialTheme {
+            var modoOscuro by remember {
+                mutableStateOf(persistencia.cargarPreferenciaModoOscuro())
+            }
+
+            AcademiTrackTheme(darkTheme = modoOscuro) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     AcademiTrackApp(
                         gestorNotas = gestorNotas,
-                        gestorAsistencia = gestorAsistencia
+                        gestorAsistencia = gestorAsistencia,
+                        persistencia = persistencia,
+                        modoOscuro = modoOscuro,
+                        onCambiarModo = {
+                            modoOscuro = it
+                            persistencia.guardarPreferenciaModoOscuro(it)
+                        }
                     )
                 }
             }
-        }
-    }
-
-    private fun inicializarDatosEjemplo() {
-        // Evaluación 1
-        val eval1 = EvaluacionManual(
-            id = "eval_1",
-            nombreEval = "Certamen 1",
-            porcentajeEval = 30.0,
-            fechaEval = System.currentTimeMillis(),
-            idCursoEval = "prog_avanzada"
-        )
-        eval1.setNotaObtenida(5.5)
-        gestorNotas.agregarEvaluacion(eval1)
-
-        // Evaluación 2
-        val eval2 = EvaluacionManual(
-            id = "eval_2",
-            nombreEval = "Taller 1",
-            porcentajeEval = 15.0,
-            fechaEval = System.currentTimeMillis(),
-            idCursoEval = "prog_avanzada"
-        )
-        eval2.setNotaObtenida(6.0)
-        gestorNotas.agregarEvaluacion(eval2)
-
-        // Evaluación pendiente
-        val eval3 = EvaluacionManual(
-            id = "eval_3",
-            nombreEval = "Certamen 2",
-            porcentajeEval = 30.0,
-            fechaEval = System.currentTimeMillis() + 86400000L * 7,
-            idCursoEval = "prog_avanzada"
-        )
-        gestorNotas.agregarEvaluacion(eval3)
-
-        // Evaluación pendiente 2
-        val eval4 = EvaluacionManual(
-            id = "eval_4",
-            nombreEval = "Proyecto Final",
-            porcentajeEval = 25.0,
-            fechaEval = System.currentTimeMillis() + 86400000L * 14,
-            idCursoEval = "prog_avanzada"
-        )
-        gestorNotas.agregarEvaluacion(eval4)
-
-        // Asistencias
-        for (i in 1..10) {
-            val asist = Asistencia(
-                idAsistencia = "asist_$i",
-                idCurso = "prog_avanzada",
-                fecha = System.currentTimeMillis() - (86400000L * i),
-                estado = if (i % 4 == 0) EstadoAsistencia.AUSENTE else EstadoAsistencia.PRESENTE
-            )
-            gestorAsistencia.registrarAsistencia(asist)
         }
     }
 }
@@ -98,7 +53,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AcademiTrackApp(
     gestorNotas: GestorNotas,
-    gestorAsistencia: GestorAsistencia
+    gestorAsistencia: GestorAsistencia,
+    persistencia: PersistenciaLocal,
+    modoOscuro: Boolean,
+    onCambiarModo: (Boolean) -> Unit
 ) {
     var pantallaActual by remember { mutableStateOf("cursos") }
     var cursoSeleccionado by remember { mutableStateOf<Curso?>(null) }
@@ -106,22 +64,16 @@ fun AcademiTrackApp(
     val apiKey = "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"
 
     val cursos = remember {
-        mutableStateListOf(
-            Curso(
-                idCurso = "prog_avanzada",
-                nombre = "Programación Avanzada",
-                codigo = "INF-301",
-                porcentajeAsistenciaMinimo = 75.0,
-                notaMinimaAprobacion = 4.0
-            ),
-            Curso(
-                idCurso = "base_datos",
-                nombre = "Base de Datos",
-                codigo = "INF-302",
-                porcentajeAsistenciaMinimo = 80.0,
-                notaMinimaAprobacion = 4.0
-            )
-        )
+        mutableStateListOf<Curso>().apply {
+            addAll(persistencia.cargarCursos())
+        }
+    }
+
+    // Guardar cursos cuando cambien
+    LaunchedEffect(cursos.size) {
+        if (cursos.isNotEmpty()) {
+            persistencia.guardarCursos(cursos.toList())
+        }
     }
 
     when (pantallaActual) {
@@ -133,7 +85,21 @@ fun AcademiTrackApp(
                     pantallaActual = "detalle"
                 },
                 onAgregarCurso = {
-                    // TODO: Implementar diálogo agregar curso
+                    pantallaActual = "agregar_curso"
+                },
+                onAjustes = {
+                    pantallaActual = "ajustes"
+                }
+            )
+        }
+
+        "agregar_curso" -> {
+            AgregarCursoScreen(
+                onVolverClick = { pantallaActual = "cursos" },
+                onGuardar = { curso ->
+                    cursos.add(curso)
+                    persistencia.guardarCursos(cursos.toList())
+                    pantallaActual = "cursos"
                 }
             )
         }
@@ -146,7 +112,14 @@ fun AcademiTrackApp(
                     gestorAsistencia = gestorAsistencia,
                     onVolverClick = { pantallaActual = "cursos" },
                     onAgregarNota = { pantallaActual = "agregar_nota" },
-                    onAgregarConIA = { pantallaActual = "camera" }
+                    onAgregarConIA = { pantallaActual = "camera" },
+                    onVerCalendario = { pantallaActual = "calendario" },
+                    onEditarCurso = { pantallaActual = "editar_curso" },
+                    onEliminarCurso = {
+                        cursos.remove(curso)
+                        persistencia.guardarCursos(cursos.toList())
+                        pantallaActual = "cursos"
+                    }
                 )
             }
         }
@@ -163,6 +136,7 @@ fun AcademiTrackApp(
                 )
             }
         }
+
         "camera" -> {
             cursoSeleccionado?.let { curso ->
                 CameraScreen(
@@ -176,6 +150,91 @@ fun AcademiTrackApp(
                 )
             }
         }
+
+        "calendario" -> {
+            cursoSeleccionado?.let { curso ->
+                CalendarioAsistenciaScreen(
+                    curso = curso,
+                    gestorAsistencia = gestorAsistencia,
+                    onVolverClick = { pantallaActual = "detalle" },
+                    onRegistrarAsistencia = { fecha, estado ->
+                        val asist = Asistencia(
+                            idAsistencia = "asist_${System.currentTimeMillis()}",
+                            idCurso = curso.getId(),
+                            fecha = fecha,
+                            estado = estado
+                        )
+                        gestorAsistencia.registrarAsistencia(asist)
+                    }
+                )
+            }
+        }
+
+        "editar_curso" -> {
+            cursoSeleccionado?.let { curso ->
+                EditarCursoScreen(
+                    curso = curso,
+                    onVolverClick = { pantallaActual = "detalle" },
+                    onGuardar = { cursoEditado ->
+                        val index = cursos.indexOfFirst { it.getId() == curso.getId() }
+                        if (index != -1) {
+                            cursos[index] = cursoEditado
+                            cursoSeleccionado = cursoEditado
+                            persistencia.guardarCursos(cursos.toList())
+                        }
+                        pantallaActual = "detalle"
+                    }
+                )
+            }
+        }
+
+        "ajustes" -> {
+            AjustesScreen(
+                modoOscuro = modoOscuro,
+                onCambiarModo = onCambiarModo,
+                onVolverClick = { pantallaActual = "cursos" },
+                onConfigNotificaciones = { pantallaActual = "notificaciones" }
+            )
+        }
+
+        "notificaciones" -> {
+            ConfigurarNotificacionesScreen(
+                cursos = cursos,
+                onVolverClick = { pantallaActual = "ajustes" },
+                persistencia = persistencia
+            )
+        }
     }
 }
 
+@Composable
+fun AcademiTrackTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) {
+    val colorScheme = if (darkTheme) {
+        darkColorScheme(
+            primary = androidx.compose.ui.graphics.Color(0xFF6200EE),
+            secondary = androidx.compose.ui.graphics.Color(0xFF03DAC6),
+            tertiary = androidx.compose.ui.graphics.Color(0xFF3700B3),
+            background = androidx.compose.ui.graphics.Color(0xFF121212),
+            surface = androidx.compose.ui.graphics.Color(0xFF1E1E1E),
+            error = androidx.compose.ui.graphics.Color(0xFFCF6679)
+        )
+    } else {
+        lightColorScheme(
+            primary = androidx.compose.ui.graphics.Color(0xFF6200EE),
+            secondary = androidx.compose.ui.graphics.Color(0xFF03DAC6),
+            tertiary = androidx.compose.ui.graphics.Color(0xFF3700B3),
+            background = androidx.compose.ui.graphics.Color(0xFFFFFBFE),
+            surface = androidx.compose.ui.graphics.Color(0xFFFFFBFE),
+            error = androidx.compose.ui.graphics.Color(0xFFB00020)
+        )
+    }
+
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = Typography(),
+        content = content
+    )
+}
