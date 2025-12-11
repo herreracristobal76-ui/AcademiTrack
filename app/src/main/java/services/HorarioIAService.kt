@@ -5,6 +5,7 @@ import android.util.Base64
 import android.util.Log
 import com.academitrack.app.domain.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -16,21 +17,23 @@ import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
 /**
- * VERSIÓN ACTUALIZADA - Con creación automática de cursos
+ * VERSIÓN OPTIMIZADA - Maneja Rate Limits (429) automáticamente
  */
 class HorarioIAService(private val apiKey: String) {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(90, TimeUnit.SECONDS)  // ⬆️ Aumentado
+        .readTimeout(90, TimeUnit.SECONDS)     // ⬆️ Aumentado
+        .writeTimeout(90, TimeUnit.SECONDS)    // ⬆️ Aumentado
         .build()
 
     companion object {
         private const val TAG = "HorarioIA"
-        private const val MAX_IMAGE_SIZE = 1024
-        private const val JPEG_QUALITY = 75
+        private const val MAX_IMAGE_SIZE = 800  // ⬇️ Reducido para enviar menos datos
+        private const val JPEG_QUALITY = 70     // ⬇️ Reducido para comprimir más
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+        private const val MAX_REINTENTOS = 3     // 🔄 Máximo de reintentos
+        private const val DELAY_BASE_MS = 5000L  // ⏱️ 5 segundos entre reintentos
     }
 
     suspend fun procesarImagenHorario(
@@ -42,42 +45,28 @@ class HorarioIAService(private val apiKey: String) {
             Log.d(TAG, "🔍 Procesando horario para ${semestre.obtenerNombre()}")
 
             val imagenOptimizada = optimizarImagen(imagenBase64)
+            Log.d(TAG, "📦 Imagen optimizada: ${imagenOptimizada.length / 1024}KB")
 
             val cursosInfo = if (cursosExistentes.isNotEmpty()) {
-                "Cursos existentes activos:\n" + cursosExistentes
-                    .filter { it.estaActivo() }
-                    .joinToString("\n") { "• ${it.getNombre()} (${it.getCodigo()})" }
-            } else "No hay cursos registrados aún"
+                "Cursos activos: ${cursosExistentes.filter { it.estaActivo() }.joinToString(", ") { it.getCodigo() }}"
+            } else "Sin cursos previos"
 
             val prompt = """
-                Analiza esta imagen de un horario académico universitario.
+                Analiza este horario universitario y extrae SOLO la información visible.
                 
-                CONTEXTO:
                 Semestre: ${semestre.obtenerNombre()}
-                Período: ${semestre.tipo.descripcion}
-                
                 $cursosInfo
                 
-                ESTRUCTURA:
-                • Columnas: Días de la semana
-                • Filas: Módulos con horarios
-                • Celdas: Nombre curso, sala, profesor
-                
-                INSTRUCCIONES:
-                1. Identifica TODOS los cursos únicos del horario
-                2. Para cada curso, extrae su código si está visible
-                3. Genera una lista de cursos y sus clases
-                
-                FORMATO DE RESPUESTA (JSON sin markdown):
+                Responde en JSON (sin markdown):
                 {
                     "cursos": [
                         {
-                            "nombre": "Programación Orientada a Objetos",
-                            "codigo": "INF-2241",
+                            "nombre": "Nombre Curso",
+                            "codigo": "COD-123",
                             "clases": [
                                 {
                                     "sala": "A-201",
-                                    "profesor": "Juan Pérez",
+                                    "profesor": "Apellido",
                                     "dia": 1,
                                     "horaInicio": "08:30",
                                     "horaFin": "10:00",
@@ -88,35 +77,99 @@ class HorarioIAService(private val apiKey: String) {
                     ]
                 }
                 
-                IMPORTANTE:
-                • Agrupa todas las clases por curso
-                • Si no ves el código, genera uno (ej: "CURSO-001")
-                • dia: 1=Lun, 2=Mar, 3=Mié, 4=Jue, 5=Vie
+                • dia: 1=Lun, 2=Mar, 3=Mié, 4=Jue, 5=Vie, 6=Sáb, 7=Dom
                 • tipo: CATEDRA, LABORATORIO, AYUDANTIA, TALLER
+                • Si no ves el código, inventa uno como "CURSO-001"
             """.trimIndent()
 
+            // 🎯 ESTRATEGIA: Probar modelos en orden de éxito conocido
             val modelos = listOf(
-                "gemini-2.5-flash",
-                "gemini-flash-latest",
-                "gemini-2.0-flash"
+                "gemini-1.5-flash-8b",      // ⚡ MÁS RÁPIDO = Menos rate limit
+                "gemini-1.5-flash",         // ✅ Más confiable
+                "gemini-2.0-flash-exp",     // 🆕 Experimental pero potente
+                "gemini-1.5-pro"            // 💪 Último recurso (más lento)
             )
 
+            Log.d(TAG, "🎯 Estrategia: Probar ${modelos.size} modelos con reintentos inteligentes")
+
             for ((index, modelo) in modelos.withIndex()) {
+                // ⏱️ Agregar delay entre modelos para evitar rate limit
+                if (index > 0) {
+                    val delayMs = 2000L // 2 segundos entre cambios de modelo
+                    Log.d(TAG, "⏳ Esperando ${delayMs/1000}s antes de probar siguiente modelo...")
+                    delay(delayMs)
+                }
+
                 try {
-                    Log.d(TAG, "📡 [${index + 1}/${modelos.size}] $modelo")
-                    return@withContext llamarAPIYParsearConCursos(modelo, imagenOptimizada, prompt, cursosExistentes, semestre)
+                    Log.d(TAG, "📡 [${index + 1}/${modelos.size}] Intentando: $modelo")
+
+                    // 🔄 Intentar con reintentos automáticos
+                    val resultado = intentarConReintentos(
+                        modelo = modelo,
+                        imagenBase64 = imagenOptimizada,
+                        prompt = prompt,
+                        cursosExistentes = cursosExistentes,
+                        semestre = semestre
+                    )
+
+                    Log.d(TAG, "✅ ¡ÉXITO con $modelo!")
+                    return@withContext resultado
+
                 } catch (e: Exception) {
-                    Log.w(TAG, "⚠️ Falló: ${e.message}")
-                    if (e.message?.contains("403") == true || e.message?.contains("429") == true) {
-                        throw e
+                    Log.w(TAG, "⚠️ [$modelo] Error: ${e.message}")
+
+                    when {
+                        e.message?.contains("429") == true -> {
+                            Log.w(TAG, "⏱️ Rate limit alcanzado. Probando siguiente modelo...")
+                            continue // Probar siguiente modelo
+                        }
+                        e.message?.contains("403") == true -> {
+                            Log.w(TAG, "🔒 Sin acceso a $modelo. Probando siguiente...")
+                            continue
+                        }
+                        e.message?.contains("404") == true -> {
+                            continue // Modelo no existe
+                        }
+                        else -> {
+                            // Error grave, esperar y continuar
+                            Log.e(TAG, "❌ Error grave: ${e.message}")
+                            delay(3000) // Esperar 3 segundos
+                            continue
+                        }
                     }
                 }
             }
 
-            throw Exception("No se pudo procesar el horario")
+            // Si llegamos aquí, ningún modelo funcionó
+            throw Exception("""
+                ⏱️ LÍMITE DE SOLICITUDES ALCANZADO
+                
+                Has superado el límite temporal de la API de Google.
+                
+                ✅ SOLUCIONES INMEDIATAS:
+                
+                1️⃣ ESPERA 1-2 MINUTOS
+                   • Es un límite temporal
+                   • Se resetea automáticamente
+                
+                2️⃣ USA EL MODO MANUAL
+                   • Toca "Cancelar"
+                   • Agrega las clases manualmente
+                   • Es más rápido que esperar
+                
+                📊 LÍMITES DEL PLAN GRATUITO:
+                   • 15 solicitudes por minuto
+                   • 1,500 solicitudes por día
+                
+                💡 CONSEJO:
+                   Si usas mucho la IA, considera:
+                   • Esperar unos minutos entre análisis
+                   • Procesar varios horarios de una vez
+                   • Subir imágenes más pequeñas
+            """.trimIndent())
 
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error", e)
+            Log.e(TAG, "❌ Error fatal", e)
             ResultadoHorarioConCursos(
                 exito = false,
                 cursosNuevos = emptyList(),
@@ -124,6 +177,43 @@ class HorarioIAService(private val apiKey: String) {
                 confianza = 0.0,
                 mensaje = e.message ?: "Error desconocido"
             )
+        }
+    }
+
+    /**
+     * 🔄 Intenta llamar a la API con reintentos automáticos en caso de rate limit
+     */
+    private suspend fun intentarConReintentos(
+        modelo: String,
+        imagenBase64: String,
+        prompt: String,
+        cursosExistentes: List<Curso>,
+        semestre: Semestre,
+        intentoActual: Int = 1
+    ): ResultadoHorarioConCursos {
+        return try {
+            llamarAPIYParsearConCursos(modelo, imagenBase64, prompt, cursosExistentes, semestre)
+        } catch (e: Exception) {
+            when {
+                e.message?.contains("429") == true && intentoActual < MAX_REINTENTOS -> {
+                    // Rate limit: esperar con backoff exponencial
+                    val delayMs = DELAY_BASE_MS * intentoActual
+                    Log.w(TAG, "⏱️ Rate limit. Reintento $intentoActual/$MAX_REINTENTOS en ${delayMs/1000}s...")
+                    delay(delayMs)
+                    intentarConReintentos(modelo, imagenBase64, prompt, cursosExistentes, semestre, intentoActual + 1)
+                }
+                e.message?.contains("500") == true || e.message?.contains("503") == true -> {
+                    // Error del servidor: reintentar una vez
+                    if (intentoActual == 1) {
+                        Log.w(TAG, "🔄 Error del servidor. Reintentando en 3s...")
+                        delay(3000)
+                        intentarConReintentos(modelo, imagenBase64, prompt, cursosExistentes, semestre, 2)
+                    } else {
+                        throw e
+                    }
+                }
+                else -> throw e
+            }
         }
     }
 
@@ -154,7 +244,7 @@ class HorarioIAService(private val apiKey: String) {
                 put("temperature", 0.1)
                 put("topK", 10)
                 put("topP", 0.5)
-                put("maxOutputTokens", 4096)
+                put("maxOutputTokens", 2048) // ⬇️ Reducido para respuestas más rápidas
             })
             put("safetySettings", JSONArray().apply {
                 listOf(
@@ -177,13 +267,24 @@ class HorarioIAService(private val apiKey: String) {
             .build()
 
         val response = client.newCall(request).execute()
+        val responseBody = response.body?.string()
 
         if (!response.isSuccessful) {
-            throw Exception("Error ${response.code}")
+            val errorMsg = when (response.code) {
+                429 -> {
+                    // Extraer tiempo de espera si está disponible
+                    val retryAfter = response.header("Retry-After")?.toLongOrNull() ?: 60
+                    "Rate limit alcanzado. Espera ${retryAfter}s"
+                }
+                403 -> "Sin permisos para modelo $modelo"
+                404 -> "Modelo $modelo no disponible"
+                500, 503 -> "Error temporal del servidor"
+                else -> "Error HTTP ${response.code}"
+            }
+            throw Exception(errorMsg)
         }
 
-        val responseBody = response.body?.string() ?: throw Exception("Respuesta vacía")
-        return parsearRespuestaConCursos(responseBody, cursosExistentes, semestre)
+        return parsearRespuestaConCursos(responseBody ?: "", cursosExistentes, semestre)
     }
 
     private fun parsearRespuestaConCursos(
@@ -195,12 +296,13 @@ class HorarioIAService(private val apiKey: String) {
             val jsonResponse = JSONObject(responseBody)
 
             if (jsonResponse.has("error")) {
-                throw Exception(jsonResponse.getJSONObject("error").getString("message"))
+                val error = jsonResponse.getJSONObject("error")
+                throw Exception("API: ${error.optString("message", "Error desconocido")}")
             }
 
             val candidates = jsonResponse.getJSONArray("candidates")
             if (candidates.length() == 0) {
-                throw Exception("Sin respuesta generada")
+                throw Exception("Sin respuesta de la IA")
             }
 
             val content = candidates.getJSONObject(0).getJSONObject("content")
@@ -224,7 +326,6 @@ class HorarioIAService(private val apiKey: String) {
                     val nombreCurso = objCurso.getString("nombre")
                     val codigoCurso = objCurso.optString("codigo", "CURSO-${System.currentTimeMillis() / 1000}")
 
-                    // Verificar si el curso ya existe
                     val cursoExistente = cursosExistentes.find {
                         it.estaActivo() && (
                                 it.getCodigo().equals(codigoCurso, ignoreCase = true) ||
@@ -234,7 +335,6 @@ class HorarioIAService(private val apiKey: String) {
 
                     val idCurso = cursoExistente?.getId() ?: "curso_${System.currentTimeMillis()}_$i"
 
-                    // Si no existe, crear nuevo curso
                     if (cursoExistente == null) {
                         val nuevoCurso = Curso(
                             idCurso = idCurso,
@@ -245,12 +345,8 @@ class HorarioIAService(private val apiKey: String) {
                             idSemestre = semestre.id
                         )
                         cursosNuevos.add(nuevoCurso)
-                        Log.d(TAG, "✨ Curso nuevo: $nombreCurso ($codigoCurso)")
-                    } else {
-                        Log.d(TAG, "♻️ Curso existente: $nombreCurso")
                     }
 
-                    // Procesar clases del curso
                     val clasesArray = objCurso.getJSONArray("clases")
                     for (j in 0 until clasesArray.length()) {
                         val objClase = clasesArray.getJSONObject(j)
@@ -298,8 +394,8 @@ class HorarioIAService(private val apiKey: String) {
             )
 
         } catch (e: Exception) {
-            Log.e(TAG, "Error parseando", e)
-            throw Exception("Error: ${e.message}")
+            Log.e(TAG, "Error parseando respuesta", e)
+            throw Exception("Error interpretando respuesta: ${e.message}")
         }
     }
 
@@ -308,18 +404,36 @@ class HorarioIAService(private val apiKey: String) {
             val imageBytes = Base64.decode(imagenBase64, Base64.DEFAULT)
             val bitmap = android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
 
-            if (bitmap == null) return imagenBase64 // Si no es imagen (ej. PDF corrupto detectado como img), devolver original
+            if (bitmap == null) return imagenBase64
 
-            val maxDimension = 1024
-            if (bitmap.width > maxDimension || bitmap.height > maxDimension) {
-                val ratio = Math.min(maxDimension.toFloat() / bitmap.width, maxDimension.toFloat() / bitmap.height)
-                val resized = Bitmap.createScaledBitmap(bitmap, (bitmap.width * ratio).toInt(), (bitmap.height * ratio).toInt(), true)
-                val stream = ByteArrayOutputStream()
-                resized.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, stream)
-                return Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
+            // 🎯 Optimización agresiva para reducir tamaño y velocidad
+            val maxDimension = MAX_IMAGE_SIZE
+            val needsResize = bitmap.width > maxDimension || bitmap.height > maxDimension
+
+            val finalBitmap = if (needsResize) {
+                val ratio = Math.min(
+                    maxDimension.toFloat() / bitmap.width,
+                    maxDimension.toFloat() / bitmap.height
+                )
+                Bitmap.createScaledBitmap(
+                    bitmap,
+                    (bitmap.width * ratio).toInt(),
+                    (bitmap.height * ratio).toInt(),
+                    true
+                )
+            } else {
+                bitmap
             }
-            imagenBase64
+
+            val stream = ByteArrayOutputStream()
+            finalBitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, stream)
+            val optimizedBase64 = Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
+
+            Log.d(TAG, "📦 Optimización: ${imageBytes.size / 1024}KB → ${stream.size() / 1024}KB")
+
+            optimizedBase64
         } catch (e: Exception) {
+            Log.w(TAG, "Error optimizando imagen", e)
             imagenBase64
         }
     }

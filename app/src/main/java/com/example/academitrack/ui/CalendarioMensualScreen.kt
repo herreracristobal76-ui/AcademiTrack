@@ -44,7 +44,7 @@ fun CalendarioMensualScreen(
     onLimpiarHorario: () -> Unit,
     onRegistrarAsistencia: (String, Long, EstadoAsistencia) -> Unit,
     onEliminarClase: (ClaseHorario) -> Unit,
-    esPantallaPrincipal: Boolean = false // NUEVO PARAMETRO
+    esPantallaPrincipal: Boolean = false
 ) {
     val pagerState = rememberPagerState(pageCount = { 2 })
     val scope = rememberCoroutineScope()
@@ -66,7 +66,6 @@ fun CalendarioMensualScreen(
             Column {
                 TopAppBar(
                     title = { Text("Calendario", fontWeight = FontWeight.Bold) },
-                    // Solo muestra el botón volver si NO es pantalla principal
                     navigationIcon = {
                         if (!esPantallaPrincipal) {
                             IconButton(onClick = onVolverClick) {
@@ -135,12 +134,11 @@ fun CalendarioMensualScreen(
             when (page) {
                 0 -> {
                     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                        // Selector de Mes
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             shape = RoundedCornerShape(16.dp),
-                            elevation = CardDefaults.cardElevation(0.dp) // Diseño plano
+                            elevation = CardDefaults.cardElevation(0.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -165,9 +163,9 @@ fun CalendarioMensualScreen(
                         Spacer(Modifier.height(16.dp))
 
                         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            LeyendaColor(Color(0xFF4CAF50), "Bien")
-                            LeyendaColor(Color(0xFFFFC107), "Regular")
-                            LeyendaColor(Color(0xFFF44336), "Mal")
+                            LeyendaColor(Color(0xFF4CAF50), "Todas")
+                            LeyendaColor(Color(0xFFFFC107), "Parcial")
+                            LeyendaColor(Color(0xFFF44336), "Ninguna")
                         }
 
                         key(refreshTrigger.value) {
@@ -222,11 +220,7 @@ fun CalendarioMensualScreen(
         }
     }
 
-    // --- DIÁLOGOS Y COMPONENTES (Igual que antes) ---
-    // (Incluye los diálogos de asistencia, eliminar, etc. que ya estaban)
-    // Para brevedad, el código sigue la misma lógica interna de la versión anterior
-    // solo se modificó el Scaffold y los parámetros.
-
+    // NUEVO: Diálogo mejorado para registrar asistencia por clase individual
     diaSeleccionado?.let { dia ->
         val fechaStr = SimpleDateFormat("EEEE d 'de' MMMM", Locale("es", "ES")).format(dia.time)
         val diaSemana = DiaSemana.fromCalendar(dia.get(Calendar.DAY_OF_WEEK))
@@ -252,27 +246,32 @@ fun CalendarioMensualScreen(
                             Text("No hay clases este día", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else {
-                        Text("Asistencia:", style = MaterialTheme.typography.labelLarge)
+                        Text("Marca la asistencia de cada clase:", style = MaterialTheme.typography.labelLarge)
                         Spacer(Modifier.height(8.dp))
-                        clasesDelDia.forEach { clase ->
-                            val timestamp = dia.timeInMillis
-                            val asistencias = gestorAsistencia.obtenerAsistenciasPorFecha(clase.idCurso, timestamp, timestamp + 86400000)
-                            val estadoActual = asistencias.firstOrNull()?.getEstado()
 
-                            ClassAttendanceItem(
-                                clase = clase,
-                                estadoActual = estadoActual,
-                                onMarcar = { estado ->
-                                    onRegistrarAsistencia(clase.idCurso, dia.timeInMillis, estado)
-                                    refreshTrigger.value = System.currentTimeMillis()
-                                    diaSeleccionado = null
-                                }
-                            )
-                            Spacer(Modifier.height(8.dp))
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(clasesDelDia) { clase ->
+                                val timestamp = dia.timeInMillis
+                                val asistencias = gestorAsistencia.obtenerAsistenciasPorFecha(clase.idCurso, timestamp, timestamp + 86400000)
+                                val estadoActual = asistencias.firstOrNull()?.getEstado()
+
+                                ClassAttendanceItem(
+                                    clase = clase,
+                                    estadoActual = estadoActual,
+                                    onMarcar = { estado ->
+                                        onRegistrarAsistencia(clase.idCurso, dia.timeInMillis, estado)
+                                        refreshTrigger.value = System.currentTimeMillis()
+                                        // NO cerramos el diálogo para poder marcar otras clases
+                                    }
+                                )
+                            }
                         }
                     }
+
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = { diaSeleccionado = null }, modifier = Modifier.fillMaxWidth()) { Text("Cerrar") }
+                    Button(onClick = { diaSeleccionado = null }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Cerrar")
+                    }
                 }
             }
         }
@@ -327,7 +326,6 @@ fun CalendarioMensualScreen(
     }
 }
 
-// Funciones privadas (para evitar conflicto de nombres)
 @Composable
 private fun ItemClaseCalendario(clase: ClaseHorario, onClick: () -> Unit, onEliminar: () -> Unit) {
     Row(
@@ -404,7 +402,7 @@ private fun CalendarioGrid(
         LazyVerticalGrid(
             columns = GridCells.Fixed(7),
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 100.dp), // Espacio para la BottomBar
+            contentPadding = PaddingValues(bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -426,18 +424,37 @@ private fun CalendarioGrid(
                 var colorFondo = if (esHoy) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                 var colorTexto = if (esHoy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
 
+                // NUEVO: Cálculo mejorado del color según asistencias por clase
                 if (clasesHoy.isNotEmpty()) {
                     val asistenciasHoy = gestorAsistencia.obtenerAsistenciasPorFecha("", fechaActual.timeInMillis, fechaActual.timeInMillis)
-                    val asistenciasRelevantes = asistenciasHoy.filter { asist -> clasesHoy.any { it.idCurso == asist.getIdCurso() } }
 
-                    if (asistenciasRelevantes.isNotEmpty()) {
-                        val efectivas = asistenciasRelevantes.filter { it.getEstado() != EstadoAsistencia.CLASE_CANCELADA }
-                        if (efectivas.isNotEmpty()) {
-                            val presentes = efectivas.count { it.getEstado() == EstadoAsistencia.PRESENTE }
-                            val totalEfectivas = efectivas.size
-                            if (presentes == totalEfectivas) { colorFondo = Color(0xFF4CAF50); colorTexto = Color.White }
-                            else if (presentes == 0) { colorFondo = Color(0xFFF44336); colorTexto = Color.White }
-                            else { colorFondo = Color(0xFFFFC107); colorTexto = Color.Black }
+                    // Contar clases con asistencia registrada
+                    val clasesConAsistencia = clasesHoy.count { clase ->
+                        asistenciasHoy.any { asist ->
+                            asist.getIdCurso() == clase.idCurso && asist.getEstado() != EstadoAsistencia.CLASE_CANCELADA
+                        }
+                    }
+
+                    if (clasesConAsistencia > 0) {
+                        val clasesPresente = clasesHoy.count { clase ->
+                            asistenciasHoy.any { asist ->
+                                asist.getIdCurso() == clase.idCurso && asist.getEstado() == EstadoAsistencia.PRESENTE
+                            }
+                        }
+
+                        // Verde: Todas las clases marcadas como presente
+                        // Amarillo: Algunas presentes, otras ausentes
+                        // Rojo: Todas marcadas como ausente
+                        when {
+                            clasesPresente == clasesConAsistencia && clasesConAsistencia == clasesHoy.size -> {
+                                colorFondo = Color(0xFF4CAF50); colorTexto = Color.White
+                            }
+                            clasesPresente == 0 && clasesConAsistencia == clasesHoy.size -> {
+                                colorFondo = Color(0xFFF44336); colorTexto = Color.White
+                            }
+                            else -> {
+                                colorFondo = Color(0xFFFFC107); colorTexto = Color.Black
+                            }
                         }
                     }
                 }

@@ -30,6 +30,29 @@ class MainActivity : ComponentActivity() {
     private val gestorHorario = GestorHorario()
     private lateinit var persistencia: PersistenciaLocal
 
+    // 🔑 MULTI-API-KEY: Agrega todas las API Keys que quieras
+    // Crea más en: https://aistudio.google.com/app/apikey
+    private val apiKeys = listOf( // Tu API Key actual
+        "AIzaSyB7kE-ndmEj3n_F-_UABP-IodOr1JmOR6s",                 // API Key 2 (crea otra cuenta Gmail)
+        "AIzaSyD5YXF85rGwr9tN1aSnBIIWEfZ-KzrwIOo",                 // API Key 3
+        "AIzaSyB4SY7pZENSoT_brMB0ATDsvmTrDKKTKpc"                   // API Key 4
+    )
+    init {
+        if (apiKeys.size == 1) {
+            android.util.Log.w("MainActivity", "⚠️ ADVERTENCIA: Solo tienes 1 API Key. Crea más para evitar límites.")
+        } else {
+            android.util.Log.i("MainActivity", "✅ Usando ${apiKeys.size} API Keys (${apiKeys.size * 15} req/min)")
+        }
+    }
+    // 🔄 Rotación automática de API Keys
+    private var currentKeyIndex = 0
+
+    private fun getNextApiKey(): String {
+        val key = apiKeys[currentKeyIndex]
+        currentKeyIndex = (currentKeyIndex + 1) % apiKeys.size
+        return key
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -49,9 +72,15 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     Crossfade(targetState = mostrarSplash, animationSpec = tween(1000), label = "Splash") { isSplash ->
                         if (isSplash) SplashScreen { mostrarSplash = false }
-                        else AcademiTrackApp(gestorNotas, gestorAsistencia, gestorHorario, persistencia, modoOscuro) {
-                            modoOscuro = it; persistencia.guardarPreferenciaModoOscuro(it)
-                        }
+                        else AcademiTrackApp(
+                            gestorNotas,
+                            gestorAsistencia,
+                            gestorHorario,
+                            persistencia,
+                            modoOscuro,
+                            onCambiarModo = { modoOscuro = it; persistencia.guardarPreferenciaModoOscuro(it) },
+                            onGetApiKey = { getNextApiKey() }  // 🔑 Proveedor de API Keys
+                        )
                     }
                 }
             }
@@ -72,20 +101,19 @@ fun AcademiTrackApp(
     gestorHorario: GestorHorario,
     persistencia: PersistenciaLocal,
     modoOscuro: Boolean,
-    onCambiarModo: (Boolean) -> Unit
+    onCambiarModo: (Boolean) -> Unit,
+    onGetApiKey: () -> String  // 🔑 NUEVO: Función para obtener API Key
 ) {
     var pantallaActual by remember { mutableStateOf("cursos") }
     var cursoSeleccionado by remember { mutableStateOf<Curso?>(null) }
     var semestreSeleccionado by remember { mutableStateOf<Semestre?>(null) }
     val context = LocalContext.current
-    val apiKey = "AIzaSyDtpM1m_CHzXefhZ9zYcv3qWe1nnkt7rvo"
 
     val cursos = remember { mutableStateListOf<Curso>().apply { addAll(persistencia.cargarCursos()) } }
     val triggerUpdate = remember { mutableStateOf(0L) }
 
     LaunchedEffect(cursos.size) { if (cursos.isNotEmpty()) persistencia.guardarCursos(cursos.toList()) }
 
-    // Pantallas principales para el BottomBar
     val pantallasPrincipales = listOf("cursos", "calendario_mensual", "estadisticas")
 
     Scaffold(
@@ -132,7 +160,6 @@ fun AcademiTrackApp(
                     }
                 )
 
-                // CORREGIDO: Llamada correcta a CalendarioMensualScreen (sin parámetros extra)
                 "calendario_mensual" -> CalendarioMensualScreen(
                     gestorHorario = gestorHorario,
                     gestorAsistencia = gestorAsistencia,
@@ -153,22 +180,28 @@ fun AcademiTrackApp(
                         gestorHorario.eliminarClase(clase.id)
                         persistencia.guardarHorarios(gestorHorario.obtenerTodasClases())
                         Toast.makeText(context, "Clase eliminada", Toast.LENGTH_SHORT).show()
-                    }
+                    },
+                    esPantallaPrincipal = true
                 )
 
                 "estadisticas" -> EstadisticasScreen(cursos, gestorNotas, gestorAsistencia)
 
-                // PANTALLAS SECUNDARIAS
                 "cursos_archivados" -> CursosArchivadosScreen(
                     cursos = cursos.toList(),
                     onVolverClick = { pantallaActual = "cursos" },
                     onCursoClick = { c -> cursoSeleccionado = c; pantallaActual = "detalle_archivado" }
                 )
+
                 "detalle_archivado" -> cursoSeleccionado?.let { curso ->
                     DetalleCursoArchivadoScreen(curso, gestorNotas, gestorAsistencia, { pantallaActual = "cursos_archivados" }) {
-                        curso.reactivar(it); val idx = cursos.indexOfFirst { c -> c.getId() == curso.getId() }; if (idx != -1) cursos[idx] = curso; persistencia.guardarCursos(cursos.toList()); pantallaActual = "cursos"
+                        curso.reactivar(it)
+                        val idx = cursos.indexOfFirst { c -> c.getId() == curso.getId() }
+                        if (idx != -1) cursos[idx] = curso
+                        persistencia.guardarCursos(cursos.toList())
+                        pantallaActual = "cursos"
                     }
                 }
+
                 "agregar_curso" -> AgregarCursoScreen({ pantallaActual = "cursos" }) { c, h ->
                     cursos.add(c)
                     h.forEach { gestorHorario.agregarClase(it) }
@@ -176,6 +209,7 @@ fun AcademiTrackApp(
                     persistencia.guardarHorarios(gestorHorario.obtenerTodasClases())
                     pantallaActual = "cursos"
                 }
+
                 "detalle" -> cursoSeleccionado?.let { curso ->
                     key(triggerUpdate.value) {
                         DetalleCursoScreen(
@@ -185,7 +219,7 @@ fun AcademiTrackApp(
                             onVolverClick = { pantallaActual = "cursos" },
                             onAgregarNota = { pantallaActual = "agregar_nota" },
                             onAgregarConIA = { pantallaActual = "camera" },
-                            onVerCalendario = { pantallaActual = "calendario" }, // Abre calendario individual
+                            onVerCalendario = { pantallaActual = "calendario" },
                             onEditarCurso = { pantallaActual = "editar_curso" },
                             onEliminarCurso = {
                                 gestorHorario.obtenerClasesPorCurso(curso.getId()).forEach { gestorHorario.eliminarClase(it.id) }
@@ -213,20 +247,48 @@ fun AcademiTrackApp(
                         )
                     }
                 }
+
                 "agregar_nota" -> cursoSeleccionado?.let { curso ->
                     val disp = 100.0 - gestorNotas.calcularPorcentajeTotal(curso.getId())
-                    AgregarNotaScreen(curso, disp, { pantallaActual = "detalle" }) { eval -> gestorNotas.agregarEvaluacion(eval); curso.agregarEvaluacion(eval.getId()); persistencia.guardarEvaluaciones(mapOf(eval.getId() to eval)); persistencia.guardarEvaluaciones(gestorNotas.obtenerTodasEvaluaciones()); persistencia.guardarCursos(cursos.toList()); pantallaActual = "detalle" }
+                    AgregarNotaScreen(curso, disp, { pantallaActual = "detalle" }) { eval ->
+                        gestorNotas.agregarEvaluacion(eval)
+                        curso.agregarEvaluacion(eval.getId())
+                        persistencia.guardarEvaluaciones(mapOf(eval.getId() to eval))
+                        persistencia.guardarEvaluaciones(gestorNotas.obtenerTodasEvaluaciones())
+                        persistencia.guardarCursos(cursos.toList())
+                        pantallaActual = "detalle"
+                    }
                 }
+
+                // 🔑 Usar API Key dinámica
                 "camera" -> cursoSeleccionado?.let { curso ->
-                    CameraScreen(curso, apiKey, { pantallaActual = "detalle" }) { eval -> gestorNotas.agregarEvaluacion(eval); curso.agregarEvaluacion(eval.getId()); persistencia.guardarEvaluaciones(gestorNotas.obtenerTodasEvaluaciones()); persistencia.guardarCursos(cursos.toList()); pantallaActual = "detalle" }
+                    CameraScreen(curso, onGetApiKey(), { pantallaActual = "detalle" }) { eval ->
+                        gestorNotas.agregarEvaluacion(eval)
+                        curso.agregarEvaluacion(eval.getId())
+                        persistencia.guardarEvaluaciones(gestorNotas.obtenerTodasEvaluaciones())
+                        persistencia.guardarCursos(cursos.toList())
+                        pantallaActual = "detalle"
+                    }
                 }
+
                 "archivar_curso" -> cursoSeleccionado?.let { curso ->
                     val prom = gestorNotas.calcularPromedioActual(curso.getId())
-                    ArchivarCursoScreen(curso, prom, { pantallaActual = "detalle" }) { est, n -> curso.archivar(est, n); val idx = cursos.indexOfFirst { it.getId() == curso.getId() }; if (idx != -1) cursos[idx] = curso; persistencia.guardarCursos(cursos.toList()); pantallaActual = "cursos" }
+                    ArchivarCursoScreen(curso, prom, { pantallaActual = "detalle" }) { est, n ->
+                        curso.archivar(est, n)
+                        val idx = cursos.indexOfFirst { it.getId() == curso.getId() }
+                        if (idx != -1) cursos[idx] = curso
+                        persistencia.guardarCursos(cursos.toList())
+                        pantallaActual = "cursos"
+                    }
                 }
+
                 "calendario" -> cursoSeleccionado?.let { curso ->
-                    CalendarioAsistenciaScreen(curso, gestorAsistencia, { pantallaActual = "detalle" }) { f, e -> gestorAsistencia.registrarOActualizar(curso.getId(), f, e); persistencia.guardarAsistencias(gestorAsistencia.obtenerTodasAsistencias()) }
+                    CalendarioAsistenciaScreen(curso, gestorAsistencia, { pantallaActual = "detalle" }) { f, e ->
+                        gestorAsistencia.registrarOActualizar(curso.getId(), f, e)
+                        persistencia.guardarAsistencias(gestorAsistencia.obtenerTodasAsistencias())
+                    }
                 }
+
                 "editar_curso" -> cursoSeleccionado?.let { curso ->
                     val horarios = gestorHorario.obtenerClasesPorCurso(curso.getId())
                     EditarCursoScreen(curso, horarios, { pantallaActual = "detalle" }) { edit, nuevosHorarios ->
@@ -242,11 +304,14 @@ fun AcademiTrackApp(
                         pantallaActual = "detalle"
                     }
                 }
+
                 "ajustes" -> AjustesScreen(modoOscuro, onCambiarModo, { pantallaActual = "cursos" }, { pantallaActual = "notificaciones" })
                 "notificaciones" -> ConfigurarNotificacionesScreen(cursos.filter { it.estaActivo() }, { pantallaActual = "ajustes" }, persistencia)
                 "seleccionar_semestre" -> SeleccionarSemestreScreen({ pantallaActual = "calendario_mensual" }) { s -> semestreSeleccionado = s; pantallaActual = "registrar_horario" }
+
+                // 🔑 Usar API Key dinámica
                 "registrar_horario" -> semestreSeleccionado?.let { sem ->
-                    RegistrarHorarioScreen(apiKey, cursos.filter { it.estaActivo() }, sem, { pantallaActual = "seleccionar_semestre" }) { res ->
+                    RegistrarHorarioScreen(onGetApiKey(), cursos.filter { it.estaActivo() }, sem, { pantallaActual = "seleccionar_semestre" }) { res ->
                         res.cursosNuevos.forEach { cursos.add(it) }
                         res.clases.forEach { gestorHorario.agregarClase(it) }
                         persistencia.guardarCursos(cursos.toList())
@@ -260,10 +325,7 @@ fun AcademiTrackApp(
 }
 
 @Composable
-fun AcademiTrackTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit
-) {
+fun AcademiTrackTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     val lightColors = lightColorScheme(
         primary = Color(0xFF4F46E5), onPrimary = Color.White,
         primaryContainer = Color(0xFFE0E7FF), onPrimaryContainer = Color(0xFF312E81),
