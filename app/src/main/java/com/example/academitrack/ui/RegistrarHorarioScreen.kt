@@ -222,9 +222,9 @@ fun RegistrarHorarioScreen(
                             scope.launch {
                                 try {
                                     val iaService = HorarioIAService(apiKey)
-                                    val res = iaService.procesarArchivoHorario(
-                                        base64Data = archivoBase64!!,
-                                        mimeType = mimeTypeArchivo ?: "application/octet-stream",
+                                    // ✅ CORREGIDO: Ahora llama a procesarImagenHorario (la función que SÍ existe)
+                                    val res = iaService.procesarImagenHorario(
+                                        imagenBase64 = archivoBase64!!,
                                         cursosExistentes = cursos,
                                         semestre = semestre
                                     )
