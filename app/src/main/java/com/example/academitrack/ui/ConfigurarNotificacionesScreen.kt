@@ -19,22 +19,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.academitrack.app.domain.Curso
+import com.academitrack.app.notifications.AsistenciaNotificationWorker
 import com.academitrack.app.persistence.PersistenciaLocal
 
-/**
- * Pantalla para configurar notificaciones de asistencia
- *
- * UBICACIÓN: app/src/main/java/com/academitrack/app/ui/ConfigurarNotificacionesScreen.kt
- *
- * AGREGAR A MAINACTIVITY EN LA NAVEGACIÓN:
- * "notificaciones" -> {
- *     ConfigurarNotificacionesScreen(
- *         cursos = cursos,
- *         onVolverClick = { pantallaActual = "ajustes" },
- *         persistencia = persistencia
- *     )
- * }
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConfigurarNotificacionesScreen(

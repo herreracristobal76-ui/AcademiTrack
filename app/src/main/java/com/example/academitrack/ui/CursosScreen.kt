@@ -2,6 +2,7 @@
 
 package com.academitrack.app.ui
 
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,12 +16,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.academitrack.app.domain.Curso
 
+
 @Composable
 fun CursosScreen(
     cursos: List<Curso>,
     onCursoClick: (Curso) -> Unit,
     onAgregarCurso: () -> Unit,
-    onAjustes: () -> Unit
+    onAjustes: () -> Unit,
+    onVerCalendario: () -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -29,6 +32,9 @@ fun CursosScreen(
                 actions = {
                     IconButton(onClick = onAjustes) {
                         Icon(Icons.Default.Settings, "Ajustes")
+                    }
+                    IconButton(onClick = onVerCalendario) {
+                        Icon(Icons.Filled.CalendarMonth, "Ver Calendario Mensual")
                     }
                 }
             )

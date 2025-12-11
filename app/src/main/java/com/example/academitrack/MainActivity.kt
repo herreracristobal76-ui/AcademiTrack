@@ -17,12 +17,25 @@ class MainActivity : ComponentActivity() {
 
     private val gestorNotas = GestorNotas()
     private val gestorAsistencia = GestorAsistencia()
+    private val gestorHorario = GestorHorario()
     private lateinit var persistencia: PersistenciaLocal
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         persistencia = PersistenciaLocal(this)
+
+        // Cargar datos guardados
+        val evaluacionesGuardadas = persistencia.cargarEvaluaciones()
+        evaluacionesGuardadas.forEach { (_, eval) ->
+            gestorNotas.agregarEvaluacion(eval)
+        }
+
+        val asistenciasGuardadas = persistencia.cargarAsistencias()
+        gestorAsistencia.cargarAsistencias(asistenciasGuardadas)
+
+        val horariosGuardados = persistencia.cargarHorarios()
+        gestorHorario.cargarClases(horariosGuardados)
 
         setContent {
             var modoOscuro by remember {
@@ -37,6 +50,7 @@ class MainActivity : ComponentActivity() {
                     AcademiTrackApp(
                         gestorNotas = gestorNotas,
                         gestorAsistencia = gestorAsistencia,
+                        gestorHorario = gestorHorario,
                         persistencia = persistencia,
                         modoOscuro = modoOscuro,
                         onCambiarModo = {
@@ -48,12 +62,20 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onPause() {
+        super.onPause()
+        // Guardar datos al pausar la app
+        persistencia.guardarAsistencias(gestorAsistencia.obtenerTodasAsistencias())
+        persistencia.guardarHorarios(gestorHorario.obtenerTodasClases())
+    }
 }
 
 @Composable
 fun AcademiTrackApp(
     gestorNotas: GestorNotas,
     gestorAsistencia: GestorAsistencia,
+    gestorHorario: GestorHorario,
     persistencia: PersistenciaLocal,
     modoOscuro: Boolean,
     onCambiarModo: (Boolean) -> Unit
@@ -61,7 +83,7 @@ fun AcademiTrackApp(
     var pantallaActual by remember { mutableStateOf("cursos") }
     var cursoSeleccionado by remember { mutableStateOf<Curso?>(null) }
 
-    val apiKey = "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"
+    val apiKey = "AIzaSyAL5t_m929UQ2ZY8akM8d9oAeR3Zw0OD68"
 
     val cursos = remember {
         mutableStateListOf<Curso>().apply {
@@ -89,6 +111,9 @@ fun AcademiTrackApp(
                 },
                 onAjustes = {
                     pantallaActual = "ajustes"
+                },
+                onVerCalendario = {
+                    pantallaActual = "calendario_mensual"
                 }
             )
         }
@@ -129,8 +154,11 @@ fun AcademiTrackApp(
                 AgregarNotaScreen(
                     curso = curso,
                     onVolverClick = { pantallaActual = "detalle" },
-                    onGuardar = { eval ->
+                    onGuardar = { eval: Evaluacion ->
                         gestorNotas.agregarEvaluacion(eval)
+                        persistencia.guardarEvaluaciones(
+                            mapOf(eval.getId() to eval)
+                        )
                         pantallaActual = "detalle"
                     }
                 )
@@ -143,8 +171,11 @@ fun AcademiTrackApp(
                     curso = curso,
                     apiKey = apiKey,
                     onVolverClick = { pantallaActual = "detalle" },
-                    onGuardar = { eval ->
+                    onGuardar = { eval: Evaluacion ->
                         gestorNotas.agregarEvaluacion(eval)
+                        persistencia.guardarEvaluaciones(
+                            mapOf(eval.getId() to eval)
+                        )
                         pantallaActual = "detalle"
                     }
                 )
@@ -157,7 +188,7 @@ fun AcademiTrackApp(
                     curso = curso,
                     gestorAsistencia = gestorAsistencia,
                     onVolverClick = { pantallaActual = "detalle" },
-                    onRegistrarAsistencia = { fecha, estado ->
+                    onRegistrarAsistencia = { fecha: Long, estado: EstadoAsistencia ->
                         val asist = Asistencia(
                             idAsistencia = "asist_${System.currentTimeMillis()}",
                             idCurso = curso.getId(),
@@ -165,6 +196,7 @@ fun AcademiTrackApp(
                             estado = estado
                         )
                         gestorAsistencia.registrarAsistencia(asist)
+                        persistencia.guardarAsistencias(gestorAsistencia.obtenerTodasAsistencias())
                     }
                 )
             }
@@ -199,9 +231,41 @@ fun AcademiTrackApp(
 
         "notificaciones" -> {
             ConfigurarNotificacionesScreen(
-                cursos = cursos,
+                cursos = cursos.toList(),
                 onVolverClick = { pantallaActual = "ajustes" },
                 persistencia = persistencia
+            )
+        }
+
+        "calendario_mensual" -> {
+            CalendarioMensualScreen(
+                gestorHorario = gestorHorario,
+                gestorAsistencia = gestorAsistencia,
+                cursos = cursos.toList(),
+                onVolverClick = { pantallaActual = "cursos" },
+                onRegistrarHorario = { pantallaActual = "registrar_horario" },
+                onVerHorarioSemanal = { pantallaActual = "horario_semanal" }
+            )
+        }
+
+        "horario_semanal" -> {
+            HorarioSemanalScreen(
+                gestorHorario = gestorHorario,
+                onVolverClick = { pantallaActual = "calendario_mensual" },
+                onRegistrarHorario = { pantallaActual = "registrar_horario" }
+            )
+        }
+
+        "registrar_horario" -> {
+            RegistrarHorarioScreen(
+                apiKey = apiKey,
+                cursos = cursos.toList(),
+                onVolverClick = { pantallaActual = "horario_semanal" },
+                onGuardarHorario = { clases ->
+                    clases.forEach { gestorHorario.agregarClase(it) }
+                    persistencia.guardarHorarios(gestorHorario.obtenerTodasClases())
+                    pantallaActual = "horario_semanal"
+                }
             )
         }
     }

@@ -175,7 +175,7 @@ fun DetalleCursoScreen(
                         if (proyeccion.porcentajeRestante > 0) {
                             Spacer(modifier = Modifier.height(8.dp))
                             LinearProgressIndicator(
-                                progress = (100 - proyeccion.porcentajeRestante).toFloat() / 100f,
+                                progress = (100 - proyeccion.porcentajeRestante).toFloat() / 100f ,
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Text(
@@ -241,17 +241,13 @@ fun DetalleCursoScreen(
                         onClick = onAgregarConIA,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(Icons.Default.CameraAlt, null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("IA")
+                        Text("📷 IA")
                     }
                     OutlinedButton(
                         onClick = onAgregarNota,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(Icons.Default.Edit, null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Manual")
+                        Text("✏️ Manual")
                     }
                 }
             }

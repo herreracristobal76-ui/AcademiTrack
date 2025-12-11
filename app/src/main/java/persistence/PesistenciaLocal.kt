@@ -13,6 +13,68 @@ class PersistenciaLocal(private val context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("academitrack_prefs", Context.MODE_PRIVATE)
 
+    fun guardarHorarios(clases: List<ClaseHorario>): Boolean {
+        return try {
+            val jsonArray = JSONArray()
+            clases.forEach { clase ->
+                val jsonObj = JSONObject().apply {
+                    put("id", clase.id)
+                    put("idCurso", clase.idCurso)
+                    put("nombreCurso", clase.nombreCurso)
+                    put("sala", clase.sala)
+                    put("profesor", clase.profesor)
+                    put("diaSemana", clase.diaSemana.numero)
+                    put("horaInicio", clase.horaInicio)
+                    put("horaFin", clase.horaFin)
+                    put("tipoClase", clase.tipoClase.name)
+                    put("color", clase.color)
+                }
+                jsonArray.put(jsonObj)
+            }
+
+            val file = File(context.filesDir, "horarios_$fileName")
+            file.writeText(jsonArray.toString())
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    fun cargarHorarios(): List<ClaseHorario> {
+        return try {
+            val file = File(context.filesDir, "horarios_$fileName")
+            if (!file.exists()) return emptyList()
+
+            val jsonString = file.readText()
+            val jsonArray = JSONArray(jsonString)
+            val clases = mutableListOf<ClaseHorario>()
+
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+
+                val clase = ClaseHorario(
+                    id = obj.getString("id"),
+                    idCurso = obj.getString("idCurso"),
+                    nombreCurso = obj.getString("nombreCurso"),
+                    sala = obj.getString("sala"),
+                    profesor = obj.getString("profesor"),
+                    diaSemana = DiaSemana.fromNumero(obj.getInt("diaSemana")),
+                    horaInicio = obj.getString("horaInicio"),
+                    horaFin = obj.getString("horaFin"),
+                    tipoClase = TipoClase.valueOf(obj.getString("tipoClase")),
+                    color = obj.getString("color")
+                )
+                clases.add(clase)
+            }
+
+            clases
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
     fun guardarCursos(cursos: List<Curso>): Boolean {
         return try {
             val jsonArray = JSONArray()
@@ -278,3 +340,4 @@ class PersistenciaLocal(private val context: Context) {
         }
     }
 }
+
