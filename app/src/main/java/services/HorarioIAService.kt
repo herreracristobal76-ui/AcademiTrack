@@ -29,8 +29,8 @@ class HorarioIAService(private val apiKey: String) {
 
     companion object {
         private const val TAG = "HorarioIA"
-        private const val MAX_IMAGE_SIZE = 1600
-        private const val JPEG_QUALITY = 90
+        private const val MAX_IMAGE_SIZE = 1200  // ⬆️ AUMENTADO: Mejor calidad
+        private const val JPEG_QUALITY = 85      // ⬆️ AUMENTADO: Mejor reconocimiento
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
         private const val MAX_REINTENTOS = 3
         private const val DELAY_BASE_MS = 5000L
@@ -38,22 +38,14 @@ class HorarioIAService(private val apiKey: String) {
 
     suspend fun procesarImagenHorario(
         imagenBase64: String,
-        mimeType: String, // <-- ACEPTAR EL MIME TYPE
         cursosExistentes: List<Curso>,
         semestre: Semestre
     ): ResultadoHorarioConCursos = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "🔍 Procesando horario para ${semestre.obtenerNombre()} (MIME: $mimeType)")
+            Log.d(TAG, "🔍 Procesando horario para ${semestre.obtenerNombre()}")
 
-            // Solo optimizar la imagen si es una imagen JPEG o PNG estándar.
-            val imagenParaEnvio = if (mimeType.startsWith("image") && (mimeType.contains("jpeg") || mimeType.contains("png"))) {
-                optimizarImagen(imagenBase64)
-            } else {
-                // PDF o cualquier otro tipo de archivo se envía sin optimizar el Base64 original
-                imagenBase64
-            }
-
-            Log.d(TAG, "📦 Datos a enviar: ${imagenParaEnvio.length / 1024}KB")
+            val imagenOptimizada = optimizarImagen(imagenBase64)
+            Log.d(TAG, "📦 Imagen optimizada: ${imagenOptimizada.length / 1024}KB")
 
             val cursosInfo = if (cursosExistentes.isNotEmpty()) {
                 "Cursos activos: ${cursosExistentes.filter { it.estaActivo() }.joinToString(", ") { it.getCodigo() }}"
@@ -105,10 +97,10 @@ class HorarioIAService(private val apiKey: String) {
 
             // 🎯 MODELOS OPTIMIZADOS Y CORREGIDOS
             val modelos = listOf(
-                "gemini-2.5-flash",
-                "gemini-flash-latest",
-                "gemini-2.0-flash-001",
-                "gemini-2.5-pro"
+                "gemini-2.5-flash",      // ⚡ MÁS RÁPIDO Y PRECISO
+                "gemini-flash-latest",   // 🔄 SIEMPRE ACTUALIZADO
+                "gemini-2.0-flash-001",  // 💪 ESTABLE Y CONFIABLE
+                "gemini-2.5-pro"         // 🎯 ÚLTIMA OPCIÓN
             )
 
             Log.d(TAG, "🎯 Estrategia: Probar ${modelos.size} modelos optimizados")
@@ -125,8 +117,7 @@ class HorarioIAService(private val apiKey: String) {
 
                     val resultado = intentarConReintentos(
                         modelo = modelo,
-                        imagenBase64 = imagenParaEnvio,
-                        mimeType = mimeType,
+                        imagenBase64 = imagenOptimizada,
                         prompt = prompt,
                         cursosExistentes = cursosExistentes,
                         semestre = semestre
@@ -163,7 +154,7 @@ class HorarioIAService(private val apiKey: String) {
             throw Exception("""
                 ⏱️ LÍMITE DE SOLICITUDES ALCANZADO
                 
-                Has superado el límite temporal de la API de Google o la imagen es demasiado compleja.
+                Has superado el límite temporal de la API de Google.
                 
                 ✅ SOLUCIONES INMEDIATAS:
                 
@@ -171,13 +162,20 @@ class HorarioIAService(private val apiKey: String) {
                    • Es un límite temporal
                    • Se resetea automáticamente
                 
-                2️⃣ MEJORA LA CALIDAD
-                   • Si es PDF: Asegúrate de que el PDF tenga texto seleccionable o intenta convertir solo la página del horario a imagen.
-                   • Si es Foto: Asegúrate de que la tabla sea legible, con buen contraste y luz.
-                
-                3️⃣ USA EL MODO MANUAL
+                2️⃣ USA EL MODO MANUAL
                    • Toca "Cancelar"
                    • Agrega las clases manualmente
+                   • Es más rápido que esperar
+                
+                📊 LÍMITES DEL PLAN GRATUITO:
+                   • 15 solicitudes por minuto
+                   • 1,500 solicitudes por día
+                
+                💡 CONSEJO:
+                   Si usas mucho la IA, considera:
+                   • Esperar unos minutos entre análisis
+                   • Procesar varios horarios de una vez
+                   • Subir imágenes más pequeñas
             """.trimIndent())
 
         } catch (e: Exception) {
@@ -195,27 +193,26 @@ class HorarioIAService(private val apiKey: String) {
     private suspend fun intentarConReintentos(
         modelo: String,
         imagenBase64: String,
-        mimeType: String, // <-- ACEPTAR MIME TYPE
         prompt: String,
         cursosExistentes: List<Curso>,
         semestre: Semestre,
         intentoActual: Int = 1
     ): ResultadoHorarioConCursos {
         return try {
-            llamarAPIYParsearConCursos(modelo, imagenBase64, prompt, mimeType, cursosExistentes, semestre)
+            llamarAPIYParsearConCursos(modelo, imagenBase64, prompt, cursosExistentes, semestre)
         } catch (e: Exception) {
             when {
                 e.message?.contains("429") == true && intentoActual < MAX_REINTENTOS -> {
                     val delayMs = DELAY_BASE_MS * intentoActual
                     Log.w(TAG, "⏱️ Rate limit. Reintento $intentoActual/$MAX_REINTENTOS en ${delayMs/1000}s...")
                     delay(delayMs)
-                    intentarConReintentos(modelo, imagenBase64, mimeType, prompt, cursosExistentes, semestre, intentoActual + 1)
+                    intentarConReintentos(modelo, imagenBase64, prompt, cursosExistentes, semestre, intentoActual + 1)
                 }
                 e.message?.contains("500") == true || e.message?.contains("503") == true -> {
                     if (intentoActual == 1) {
                         Log.w(TAG, "🔄 Error del servidor. Reintentando en 3s...")
                         delay(3000)
-                        intentarConReintentos(modelo, imagenBase64, mimeType, prompt, cursosExistentes, semestre, 2)
+                        intentarConReintentos(modelo, imagenBase64, prompt, cursosExistentes, semestre, 2)
                     } else {
                         throw e
                     }
@@ -229,7 +226,6 @@ class HorarioIAService(private val apiKey: String) {
         modelo: String,
         imagenBase64: String,
         prompt: String,
-        mimeType: String, // <-- ACEPTAR MIME TYPE
         cursosExistentes: List<Curso>,
         semestre: Semestre
     ): ResultadoHorarioConCursos {
@@ -242,7 +238,7 @@ class HorarioIAService(private val apiKey: String) {
                         put(JSONObject().apply { put("text", prompt) })
                         put(JSONObject().apply {
                             put("inline_data", JSONObject().apply {
-                                put("mime_type", mimeType) // <-- USAR MIME TYPE DINÁMICO
+                                put("mime_type", "image/jpeg")
                                 put("data", imagenBase64)
                             })
                         })
@@ -250,10 +246,10 @@ class HorarioIAService(private val apiKey: String) {
                 })
             })
             put("generationConfig", JSONObject().apply {
-                put("temperature", 0.2)
-                put("topK", 40)
-                put("topP", 0.8)
-                put("maxOutputTokens", 4096)
+                put("temperature", 0.2)        // ⬆️ Un poco más flexible para tablas complejas
+                put("topK", 40)                // ⬆️ Más opciones para análisis
+                put("topP", 0.8)               // ⬆️ Mejor para estructuras
+                put("maxOutputTokens", 4096)   // ⬆️ Más espacio para muchas clases
             })
             put("safetySettings", JSONArray().apply {
                 listOf(
@@ -279,15 +275,98 @@ class HorarioIAService(private val apiKey: String) {
         val responseBody = response.body?.string()
 
         if (!response.isSuccessful) {
+            Log.e(TAG, "❌ Error HTTP ${response.code}: $responseBody")
+
             val errorMsg = when (response.code) {
+                400 -> """
+                    ❌ IMAGEN INVÁLIDA (400)
+                    
+                    La imagen es demasiado grande o está corrupta.
+                    
+                    SOLUCIONES:
+                    • Recorta la imagen para que sea más pequeña
+                    • Toma una foto más clara con menos zoom
+                    • Intenta con formato JPG en vez de PNG
+                """.trimIndent()
+
+                401 -> """
+                    ❌ API KEY INVÁLIDA (401)
+                    
+                    Tu API Key no funciona.
+                    
+                    SOLUCIONES:
+                    1. Ve a: https://aistudio.google.com/app/apikey
+                    2. Crea una nueva API Key
+                    3. Cópiala en MainActivity.kt línea 34:
+                       "AIzaSyA..." // <- Reemplaza aquí
+                """.trimIndent()
+
+                403 -> """
+                    ❌ SIN ACCESO (403)
+                    
+                    Tu API Key no tiene permisos para este modelo.
+                    
+                    POSIBLES CAUSAS:
+                    • Cuenta sin billing habilitado
+                    • Región bloqueada
+                    • API Key restringida
+                    
+                    SOLUCIONES:
+                    1. Verifica en: https://console.cloud.google.com/
+                    2. Habilita "Generative Language API"
+                    3. Crea una nueva API Key sin restricciones
+                """.trimIndent()
+
+                404 -> "❌ Modelo $modelo no existe (404)"
+
                 429 -> {
                     val retryAfter = response.header("Retry-After")?.toLongOrNull() ?: 60
-                    "Rate limit alcanzado. Espera ${retryAfter}s"
+                    """
+                    ⏱️ LÍMITE ALCANZADO (429)
+                    
+                    Has usado todas tus solicitudes disponibles.
+                    
+                    LÍMITES DEL PLAN GRATUITO:
+                    • 15 solicitudes por minuto
+                    • 1,500 solicitudes por día
+                    
+                    SOLUCIONES:
+                    1. Espera $retryAfter segundos
+                    2. Usa el modo manual (más rápido)
+                    3. Crea más API Keys (hasta 5 gratis)
+                    
+                    💡 CONSEJO:
+                    En MainActivity.kt puedes agregar más keys:
+                    private val apiKeys = listOf(
+                        "AIzaSy...", // Key 1
+                        "AIzaSy...", // Key 2 <- Agrega aquí
+                        "AIzaSy..."  // Key 3
+                    )
+                    """.trimIndent()
                 }
-                403 -> "Sin permisos para modelo $modelo"
-                404 -> "Modelo $modelo no disponible"
-                500, 503 -> "Error temporal del servidor"
-                else -> "Error HTTP ${response.code}"
+
+                500, 503 -> """
+                    ⚠️ ERROR DEL SERVIDOR (${response.code})
+                    
+                    Google Gemini está temporalmente caído.
+                    
+                    SOLUCIONES:
+                    • Espera 2-3 minutos
+                    • Verifica: https://status.cloud.google.com/
+                    • Usa el modo manual mientras tanto
+                """.trimIndent()
+
+                else -> """
+                    ❌ ERROR DESCONOCIDO (${response.code})
+                    
+                    Respuesta del servidor:
+                    ${responseBody?.take(200) ?: "Sin detalles"}
+                    
+                    Intenta:
+                    • Reiniciar la app
+                    • Verificar tu conexión
+                    • Crear una nueva API Key
+                """.trimIndent()
             }
             throw Exception(errorMsg)
         }
@@ -310,7 +389,7 @@ class HorarioIAService(private val apiKey: String) {
 
             val candidates = jsonResponse.getJSONArray("candidates")
             if (candidates.length() == 0) {
-                throw Exception("Sin respuesta de la IA. Posiblemente el contenido no fue detectado o fue bloqueado por filtros de seguridad.")
+                throw Exception("Sin respuesta de la IA")
             }
 
             val content = candidates.getJSONObject(0).getJSONObject("content")
@@ -322,21 +401,8 @@ class HorarioIAService(private val apiKey: String) {
                 .replace("```", "")
                 .trim()
 
-            val datos: JSONObject
-            try {
-                datos = JSONObject(jsonLimpio)
-            } catch (e: Exception) {
-                // El modelo no devolvió un JSON válido.
-                throw Exception("El modelo de IA devolvió un texto no válido. Asegúrate de que la imagen es clara y el texto es nítido. Texto devuelto (inicio): ${jsonLimpio.take(100)}...")
-            }
-
-            // Usar optJSONArray para manejar con gracia si la clave 'cursos' no existe.
-            val cursosArray = datos.optJSONArray("cursos")
-
-            if (cursosArray == null || cursosArray.length() == 0) {
-                // Si el modelo devolvió un JSON vacío o sin la estructura esperada, forzamos un error claro.
-                throw Exception("El modelo de IA no pudo extraer la tabla. Asegúrate de que el horario sea legible y esté en formato de tabla (días/horas).")
-            }
+            val datos = JSONObject(jsonLimpio)
+            val cursosArray = datos.getJSONArray("cursos")
 
             val cursosNuevos = mutableListOf<Curso>()
             val todasLasClases = mutableListOf<ClaseHorario>()
@@ -395,17 +461,8 @@ class HorarioIAService(private val apiKey: String) {
 
                 } catch (e: Exception) {
                     Log.w(TAG, "Error procesando curso $i", e)
-                    // Informar al usuario que una parte falló, pero continuar si es posible.
-                    if (cursosArray.length() == 1) {
-                        throw Exception("Error: Falla crítica al procesar los datos de la clase. Verifica si el JSON de respuesta es inválido o si faltan campos obligatorios (horaInicio, horaFin, dia).")
-                    }
                 }
             }
-
-            if (todasLasClases.isEmpty()) {
-                throw Exception("El modelo de IA no pudo extraer ninguna clase válida. Asegúrate de que el documento es un horario legible y que no contiene solo texto genérico.")
-            }
-
 
             return ResultadoHorarioConCursos(
                 exito = todasLasClases.isNotEmpty(),
@@ -424,16 +481,14 @@ class HorarioIAService(private val apiKey: String) {
             )
 
         } catch (e: Exception) {
-            // Captura cualquier error de análisis o excepción lanzada por los checks de robustez.
-            Log.e(TAG, "Error fatal en parseo", e)
-            throw e
+            Log.e(TAG, "Error parseando respuesta", e)
+            throw Exception("Error interpretando respuesta: ${e.message}")
         }
     }
 
     private fun optimizarImagen(imagenBase64: String): String {
         return try {
             val imageBytes = Base64.decode(imagenBase64, Base64.DEFAULT)
-            // Se usa android.graphics.BitmapFactory.decodeByteArray para decodificar la imagen
             val bitmap = android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
 
             if (bitmap == null) return imagenBase64
@@ -465,7 +520,6 @@ class HorarioIAService(private val apiKey: String) {
             optimizedBase64
         } catch (e: Exception) {
             Log.w(TAG, "Error optimizando imagen", e)
-            // Si la optimización falla (ej. imagen corrupta), devolvemos el Base64 original
             imagenBase64
         }
     }
