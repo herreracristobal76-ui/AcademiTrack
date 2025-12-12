@@ -257,6 +257,8 @@ fun AcademiTrackApp(
                 "editar_nota" -> cursoSeleccionado?.let { curso ->
                     evaluacionAEditar?.let { eval ->
                         val totalEvaluado = gestorNotas.calcularPorcentajeTotal(curso.getId())
+                        // Pasamos el porcentaje que no está siendo usado por OTRAS evaluaciones.
+                        // La pantalla de edición sumará el porcentaje de la evaluación actual.
                         val maxDisponible = 100.0 - totalEvaluado
 
                         EditarNotaScreen(
