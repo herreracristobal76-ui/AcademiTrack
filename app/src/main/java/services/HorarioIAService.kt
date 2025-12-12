@@ -52,41 +52,55 @@ class HorarioIAService(private val apiKey: String) {
             } else "Sin cursos previos"
 
             val prompt = """
-                Analiza este horario universitario y extrae SOLO la información visible.
+                Analiza CUIDADOSAMENTE este horario universitario. Es una tabla con módulos (filas) y días (columnas).
+                
+                INSTRUCCIONES CRÍTICAS:
+                1. Lee CADA celda que tenga texto (ignora celdas vacías)
+                2. Identifica el CÓDIGO del curso (ej: INF-215, INF-213, MFG-114)
+                3. Extrae el nombre completo del curso
+                4. Identifica la SALA (ej: Sala I100, Sala F-307, Laboratorio DCI03)
+                5. Extrae el nombre del PROFESOR
+                6. Determina el DÍA de la semana según la columna
+                7. Calcula las HORAS según el módulo (mira la columna izquierda)
+                8. Si dice "Laboratorio" o "Lab" es tipo LABORATORIO, sino CATEDRA
                 
                 Semestre: ${semestre.obtenerNombre()}
                 $cursosInfo
                 
-                Responde en JSON (sin markdown):
+                FORMATO DE RESPUESTA (SOLO JSON, sin ```):
                 {
                     "cursos": [
                         {
-                            "nombre": "Nombre Curso",
-                            "codigo": "INF-123",
+                            "nombre": "Circuitos digitales L2",
+                            "codigo": "INF-215",
                             "clases": [
                                 {
-                                    "sala": "A-201",
-                                    "profesor": "Apellido",
+                                    "sala": "Laboratorio DCI03",
+                                    "profesor": "Pablo Vilches",
                                     "dia": 1,
                                     "horaInicio": "08:30",
-                                    "horaFin": "10:00",
-                                    "tipo": "CATEDRA"
+                                    "horaFin": "10:35",
+                                    "tipo": "LABORATORIO"
                                 }
                             ]
                         }
                     ]
                 }
                 
-                • dia: 1=Lun, 2=Mar, 3=Mié, 4=Jue, 5=Vie, 6=Sáb, 7=Dom
-                • tipo: CATEDRA, LABORATORIO, AYUDANTIA, TALLER
-                • Si no ves el código, inventa uno como "CURSO-001"
+                REGLAS:
+                • dia: 1=Lunes, 2=Martes, 3=Miércoles, 4=Jueves, 5=Viernes
+                • tipo: LABORATORIO si dice "Lab/Laboratorio", sino CATEDRA
+                • Si no ves el profesor, usa "Por asignar"
+                • Si el código no es claro, extráelo del texto (ej: "INF-215" de "INF - 215 Circuitos...")
+                • IMPORTANTE: Detecta TODAS las clases de TODOS los días
             """.trimIndent()
 
-            // 🎯 MODELOS OPTIMIZADOS: Los 3 mejores en orden
+            // 🎯 MODELOS OPTIMIZADOS Y CORREGIDOS
             val modelos = listOf(
                 "gemini-2.5-flash",      // ⚡ MÁS RÁPIDO Y PRECISO
                 "gemini-flash-latest",   // 🔄 SIEMPRE ACTUALIZADO
-                "gemini-2.0-flash-001"   // 💪 ESTABLE Y CONFIABLE
+                "gemini-2.0-flash-001",  // 💪 ESTABLE Y CONFIABLE
+                "gemini-2.5-pro"         // 🎯 ÚLTIMA OPCIÓN
             )
 
             Log.d(TAG, "🎯 Estrategia: Probar ${modelos.size} modelos optimizados")
@@ -125,6 +139,7 @@ class HorarioIAService(private val apiKey: String) {
                             continue
                         }
                         e.message?.contains("404") == true -> {
+                            Log.w(TAG, "❌ Modelo $modelo no existe. Probando siguiente...")
                             continue
                         }
                         else -> {
@@ -231,10 +246,10 @@ class HorarioIAService(private val apiKey: String) {
                 })
             })
             put("generationConfig", JSONObject().apply {
-                put("temperature", 0.1)        // ⬇️ Más preciso
-                put("topK", 10)                // ⬇️ Más enfocado
-                put("topP", 0.5)               // ⬇️ Más determinista
-                put("maxOutputTokens", 2048)   // ✅ Suficiente
+                put("temperature", 0.2)        // ⬆️ Un poco más flexible para tablas complejas
+                put("topK", 40)                // ⬆️ Más opciones para análisis
+                put("topP", 0.8)               // ⬆️ Mejor para estructuras
+                put("maxOutputTokens", 4096)   // ⬆️ Más espacio para muchas clases
             })
             put("safetySettings", JSONArray().apply {
                 listOf(
@@ -395,7 +410,6 @@ class HorarioIAService(private val apiKey: String) {
 
             if (bitmap == null) return imagenBase64
 
-            // 🎯 Optimización MEJORADA: Balance entre calidad y tamaño
             val maxDimension = MAX_IMAGE_SIZE
             val needsResize = bitmap.width > maxDimension || bitmap.height > maxDimension
 
@@ -408,7 +422,7 @@ class HorarioIAService(private val apiKey: String) {
                     bitmap,
                     (bitmap.width * ratio).toInt(),
                     (bitmap.height * ratio).toInt(),
-                    true  // ⬆️ CAMBIO: true = filtro de alta calidad
+                    true
                 )
             } else {
                 bitmap

@@ -13,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -24,27 +23,27 @@ fun SplashScreen(
 ) {
     var startAnimation by remember { mutableStateOf(false) }
 
-    // Animación de escala (efecto rebote)
+    // Animación de escala más rápida
     val scale by animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0.0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
+            stiffness = Spring.StiffnessMedium // Más rápido
         ),
         label = "ScaleAnimation"
     )
 
-    // Animación de opacidad (fade in)
+    // Animación de opacidad más rápida
     val alpha by animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0f,
-        animationSpec = tween(durationMillis = 1000),
+        animationSpec = tween(durationMillis = 500), // Reducido de 1000ms a 500ms
         label = "AlphaAnimation"
     )
 
-    // Lógica de tiempo
+    // Lógica de tiempo - OPTIMIZADO: Solo 800ms
     LaunchedEffect(key1 = true) {
         startAnimation = true
-        delay(2500) // La pantalla se muestra por 2.5 segundos
+        delay(800) // Reducido de 2500ms a 800ms
         onAnimationFinished()
     }
 

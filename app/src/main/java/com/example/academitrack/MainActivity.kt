@@ -51,6 +51,8 @@ class MainActivity : ComponentActivity() {
         return key
     }
 
+    // Solo necesitas cambiar el setContent en MainActivity.kt
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -68,7 +70,8 @@ class MainActivity : ComponentActivity() {
 
             AcademiTrackTheme(darkTheme = modoOscuro) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    Crossfade(targetState = mostrarSplash, animationSpec = tween(1000), label = "Splash") { isSplash ->
+                    // ⚡ OPTIMIZADO: Crossfade más rápido (400ms)
+                    Crossfade(targetState = mostrarSplash, animationSpec = tween(400), label = "Splash") { isSplash ->
                         if (isSplash) SplashScreen { mostrarSplash = false }
                         else AcademiTrackApp(
                             gestorNotas,
@@ -77,7 +80,7 @@ class MainActivity : ComponentActivity() {
                             persistencia,
                             modoOscuro,
                             onCambiarModo = { modoOscuro = it; persistencia.guardarPreferenciaModoOscuro(it) },
-                            onGetApiKey = { getNextApiKey() }  // 🔑 Proveedor de API Keys
+                            onGetApiKey = { getNextApiKey() }
                         )
                     }
                 }
