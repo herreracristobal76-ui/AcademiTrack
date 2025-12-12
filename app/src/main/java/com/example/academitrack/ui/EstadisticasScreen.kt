@@ -28,7 +28,7 @@ fun EstadisticasScreen(
     gestorNotas: GestorNotas,
     gestorAsistencia: GestorAsistencia
 ) {
-    // Cálculos Globales
+
     val cursosActivos = cursos.filter { it.estaActivo() }
 
     val promedioGlobal = if (cursosActivos.isNotEmpty()) {
@@ -42,7 +42,7 @@ fun EstadisticasScreen(
             .average()
     } else 0.0
 
-    // Contadores
+
     val cursosAprobando = cursosActivos.count { gestorNotas.calcularPromedioActual(it.getId()) >= 4.0 }
     val cursosReprobando = cursosActivos.count {
         val p = gestorNotas.calcularPromedioActual(it.getId())
@@ -66,10 +66,10 @@ fun EstadisticasScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp),
             contentPadding = PaddingValues(bottom = 100.dp)
         ) {
-            // 1. Tarjetas Resumen Global
+
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    // Tarjeta Promedio Global
+
                     StatCardLarge(
                         title = "PGA Actual",
                         value = if (promedioGlobal.isNaN()) "0.0" else String.format("%.1f", promedioGlobal),
@@ -77,7 +77,7 @@ fun EstadisticasScreen(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.weight(1f)
                     )
-                    // Tarjeta Asistencia Global
+
                     StatCardLarge(
                         title = "Asistencia",
                         value = "${String.format("%.0f", asistenciaGlobal)}%",
@@ -88,7 +88,6 @@ fun EstadisticasScreen(
                 }
             }
 
-            // 2. Estado de Cursos (Gráfico de Barras simulado)
             item {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -118,7 +117,6 @@ fun EstadisticasScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
 
-                                    // Barra de progreso
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
@@ -128,7 +126,7 @@ fun EstadisticasScreen(
                                     ) {
                                         Box(
                                             modifier = Modifier
-                                                .fillMaxWidth((nota / 7.0).toFloat().coerceIn(0f, 1f)) // Escala 1.0 - 7.0
+                                                .fillMaxWidth((nota / 7.0).toFloat().coerceIn(0f, 1f))
                                                 .fillMaxHeight()
                                                 .clip(RoundedCornerShape(6.dp))
                                                 .background(colorBarra)
@@ -149,7 +147,6 @@ fun EstadisticasScreen(
                 }
             }
 
-            // 3. Resumen Rápido
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

@@ -11,33 +11,30 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.academitrack.app.domain.*
 
-// SOLUCIÓN: La función String.hasMaxOneDecimal() fue movida a AgregarNotaScreen.kt
-// para evitar duplicidad, ya que ambas están en el mismo paquete.
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditarNotaScreen(
     evaluacion: Evaluacion,
-    maxPorcentajeDisponible: Double, // Límite real permitido (100 - %otras evaluaciones)
+    maxPorcentajeDisponible: Double,
     onVolverClick: () -> Unit,
     onGuardar: (Evaluacion) -> Unit
 ) {
-    // Inicializar estados con los valores de la evaluación
+
     var nombre by remember { mutableStateOf(evaluacion.getNombre()) }
-    // Inicializar porcentaje como String sin decimales
+
     var porcentaje by remember { mutableStateOf(evaluacion.getPorcentaje().toInt().toString()) }
-    // Inicializar nota con un decimal (o vacía)
+
     var nota by remember { mutableStateOf(evaluacion.notaObtenida?.let { String.format("%.1f", it) } ?: "") }
 
-    // El porcentaje original de esta evaluación, que debe sumarse al máximo disponible
+
     val porcentajeOriginal = evaluacion.getPorcentaje()
     val maxReal = maxPorcentajeDisponible + porcentajeOriginal
     val maxRealInt = maxReal.toInt()
 
-    // Validaciones en tiempo real
+
     val porcentajeIntVal = porcentaje.toIntOrNull()
 
-    // Es inválido si no es entero, si es mayor que el total disponible o si es <= 0
+
     val esPorcentajeInvalido = porcentajeIntVal == null || porcentajeIntVal > maxRealInt || porcentajeIntVal <= 0
 
     val mensajeErrorPorcentaje = when {
@@ -84,11 +81,11 @@ fun EditarNotaScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Campo Porcentaje con Validación
+
             OutlinedTextField(
                 value = porcentaje,
                 onValueChange = {
-                    // Solo permitir números naturales (dígitos)
+
                     if (it.all { char -> char.isDigit() } && it.length <= 3) {
                         porcentaje = it
                     }
@@ -110,7 +107,7 @@ fun EditarNotaScreen(
             OutlinedTextField(
                 value = nota,
                 onValueChange = {
-                    // Permite números, punto y valida un máximo de un decimal.
+
                     val cleanInput = it.filter { char -> char.isDigit() || char == '.' }
                     if (cleanInput.count { it == '.' } <= 1 && cleanInput.hasMaxOneDecimal()) {
                         nota = cleanInput
@@ -146,26 +143,26 @@ fun EditarNotaScreen(
 
             Button(
                 onClick = {
-                    // Convertir el porcentaje de Int a Double
+
                     val porc = porcentajeIntVal?.toDouble()
                     val notaVal = nota.toDoubleOrNull()
 
-                    // Validación de formato de nota (rango y decimales)
+
                     val esNotaFinalValida = notaVal != null && notaVal in 1.0..7.0 && nota.hasMaxOneDecimal()
 
-                    // Validación Final antes de guardar
+
                     if (nombre.isNotBlank() &&
                         porc != null && porc > 0 && mensajeErrorPorcentaje == null &&
                         esNotaFinalValida) {
 
-                        // Actualizar los campos mutables de la evaluación
+
                         evaluacion.setNombre(nombre)
                         evaluacion.setPorcentaje(porc)
                         evaluacion.setNotaObtenida(notaVal!!)
 
-                        // Si es Evaluación Manual, actualizamos sus campos específicos si es necesario
+
                         if (evaluacion is EvaluacionManual) {
-                            // No hay cambios necesarios aquí.
+
                         }
 
                         onGuardar(evaluacion)

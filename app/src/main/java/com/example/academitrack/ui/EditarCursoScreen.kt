@@ -20,23 +20,23 @@ import com.academitrack.app.domain.Curso
 @Composable
 fun EditarCursoScreen(
     curso: Curso,
-    horariosActuales: List<ClaseHorario>, // Recibimos los horarios actuales
+    horariosActuales: List<ClaseHorario>,
     onVolverClick: () -> Unit,
     onGuardar: (Curso, List<ClaseHorario>) -> Unit
 ) {
     var nombre by remember { mutableStateOf(curso.getNombre()) }
     var codigo by remember { mutableStateOf(curso.getCodigo()) }
-    // Asistencia Mínima se inicializa como String sin decimales
+
     var asistenciaMinima by remember { mutableStateOf(curso.getPorcentajeAsistenciaMinimo().toInt().toString()) }
 
-    // NOTA MÍNIMA: Ahora es fija y solo se usa para display.
+
     val notaMinimaFija = curso.getNotaMinimaAprobacion().toString()
 
-    // Validación en tiempo real (Asistencia: 75 a 100, sin decimales)
+
     val asistVal = asistenciaMinima.toIntOrNull()
     val esAsistenciaInvalida = asistVal == null || asistVal < 75 || asistVal > 100
 
-    // Estado para los horarios (iniciamos con los actuales)
+
     val listaHorarios = remember { mutableStateListOf<ClaseHorario>().apply { addAll(horariosActuales) } }
     var mostrarDialogoHorario by remember { mutableStateOf(false) }
     var showError by remember { mutableStateOf(false) }
@@ -83,7 +83,7 @@ fun EditarCursoScreen(
                     OutlinedTextField(
                         value = asistenciaMinima,
                         onValueChange = {
-                            // CAMBIO: Solo permitir números naturales (dígitos)
+
                             if (it.all { char -> char.isDigit() } && it.length <= 3) {
                                 asistenciaMinima = it
                             }
@@ -102,8 +102,8 @@ fun EditarCursoScreen(
                     )
                     OutlinedTextField(
                         value = notaMinimaFija,
-                        onValueChange = { /* Bloqueado */ },
-                        readOnly = true, // Bloqueado para ser solo 4.0
+                        onValueChange = {  },
+                        readOnly = true,
                         label = { Text("Nota Mín") },
                         modifier = Modifier.weight(1f),
                         supportingText = {
@@ -113,7 +113,7 @@ fun EditarCursoScreen(
                 }
             }
 
-            // Sección Horarios
+
             item {
                 Divider(modifier = Modifier.padding(vertical = 8.dp))
                 Row(
@@ -142,9 +142,9 @@ fun EditarCursoScreen(
                 Button(
                     onClick = {
                         val asist = asistenciaMinima.toDoubleOrNull()
-                        val notaMin = curso.getNotaMinimaAprobacion() // Usar el valor existente/fijo
+                        val notaMin = curso.getNotaMinimaAprobacion()
 
-                        // Validar asistVal usando el Int y no el Double
+
                         if (nombre.isNotBlank() && codigo.isNotBlank() && asist != null && asistVal != null && !esAsistenciaInvalida) {
 
                             val cursoEditado = Curso(
@@ -157,12 +157,12 @@ fun EditarCursoScreen(
                                 asistencias = curso.getAsistencias().toMutableList()
                             )
 
-                            // Actualizar info en horarios (por si cambió el nombre del curso)
+
                             val horariosFinales = listaHorarios.map {
                                 it.copy(
                                     idCurso = curso.getId(),
                                     nombreCurso = nombre,
-                                    // Mantener ID si ya existe, o crear uno nuevo si es agregado recién
+
                                     id = if(it.id.startsWith("clase_temp")) "clase_${System.currentTimeMillis()}_${Math.random()}" else it.id
                                 )
                             }

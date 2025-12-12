@@ -23,27 +23,27 @@ fun SplashScreen(
 ) {
     var startAnimation by remember { mutableStateOf(false) }
 
-    // Animación de escala más rápida
+
     val scale by animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0.0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium // Más rápido
+            stiffness = Spring.StiffnessMedium
         ),
         label = "ScaleAnimation"
     )
 
-    // Animación de opacidad más rápida
+
     val alpha by animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0f,
-        animationSpec = tween(durationMillis = 500), // Reducido de 1000ms a 500ms
+        animationSpec = tween(durationMillis = 500),
         label = "AlphaAnimation"
     )
 
-    // Lógica de tiempo - OPTIMIZADO: Solo 800ms
+
     LaunchedEffect(key1 = true) {
         startAnimation = true
-        delay(800) // Reducido de 2500ms a 800ms
+        delay(800)
         onAnimationFinished()
     }
 
@@ -53,7 +53,7 @@ fun SplashScreen(
             .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
-        // Contenido Central
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -61,7 +61,7 @@ fun SplashScreen(
                 .scale(scale)
                 .alpha(alpha)
         ) {
-            // Círculo del Logo
+
             Surface(
                 modifier = Modifier.size(120.dp),
                 shape = CircleShape,
@@ -80,7 +80,7 @@ fun SplashScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Título
+
             Text(
                 text = "AcademiTrack",
                 style = MaterialTheme.typography.displaySmall,
@@ -90,7 +90,7 @@ fun SplashScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Subtítulo
+
             Text(
                 text = "Tu compañero académico",
                 style = MaterialTheme.typography.titleMedium,
@@ -98,7 +98,7 @@ fun SplashScreen(
             )
         }
 
-        // Indicador de carga en la parte inferior
+
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)

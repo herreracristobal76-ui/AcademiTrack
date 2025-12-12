@@ -2,12 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Permisos existentes -->
+
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- Permisos para notificaciones -->
+
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
@@ -24,7 +24,7 @@
         android:theme="@style/Theme.AcademiTrack"
         tools:targetApi="31">
 
-        <!-- Activity principal -->
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -35,7 +35,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Receptor para acciones de notificaciones -->
+
         <receiver
             android:name=".notifications.AsistenciaActionReceiver"
             android:exported="false">
@@ -44,7 +44,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- Receptor para reiniciar notificaciones después de reiniciar el dispositivo -->
+
         <receiver
             android:name=".notifications.BootReceiver"
             android:exported="true"

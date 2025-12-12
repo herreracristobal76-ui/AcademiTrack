@@ -52,7 +52,7 @@ fun CursosScreen(
                     IconButton(onClick = onVerArchivados) {
                         Icon(Icons.Outlined.Archive, "Archivados", tint = MaterialTheme.colorScheme.onSurface)
                     }
-                    // ELIMINADO: Botón Calendario (ahora está en el BottomBar)
+
                     IconButton(onClick = onAjustes) {
                         Icon(Icons.Outlined.Settings, "Ajustes", tint = MaterialTheme.colorScheme.onSurface)
                     }
@@ -113,7 +113,7 @@ fun CursosScreen(
             } else {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(bottom = 100.dp) // Espacio extra para el BottomBar
+                    contentPadding = PaddingValues(bottom = 100.dp)
                 ) {
                     items(cursos) { curso ->
                         CursoCardMinimal(

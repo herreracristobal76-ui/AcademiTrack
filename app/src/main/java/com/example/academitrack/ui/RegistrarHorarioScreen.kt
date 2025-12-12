@@ -37,23 +37,19 @@ fun RegistrarHorarioScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // Permisos
     var hasCameraPermission by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
     }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { hasCameraPermission = it }
 
-    // Estados de archivo
     var imagenCapturada by remember { mutableStateOf<Bitmap?>(null) }
     var archivoBase64 by remember { mutableStateOf<String?>(null) }
     var mimeTypeArchivo by remember { mutableStateOf<String?>(null) }
     var nombreArchivo by remember { mutableStateOf<String?>(null) }
 
-    // Estados de proceso
     var procesando by remember { mutableStateOf(false) }
     var resultado by remember { mutableStateOf<ResultadoHorarioConCursos?>(null) }
 
-    // Launcher para Archivos (PDF e Imágenes)
     val pickFileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -71,7 +67,6 @@ fun RegistrarHorarioScreen(
                 imagenCapturada = null
                 nombreArchivo = it.lastPathSegment ?: "Archivo seleccionado"
 
-                // Intentar preview si es imagen
                 if (type.startsWith("image")) {
                     try {
                         val bitmap = android.graphics.BitmapFactory.decodeByteArray(
@@ -87,7 +82,6 @@ fun RegistrarHorarioScreen(
         }
     }
 
-    // Launcher Cámara
     val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
         bitmap?.let {
             imagenCapturada = it
@@ -153,7 +147,6 @@ fun RegistrarHorarioScreen(
             }
         } else {
             Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
-                // Previsualización
                 Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         if (imagenCapturada != null) {
@@ -164,7 +157,6 @@ fun RegistrarHorarioScreen(
                             )
                         } else {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                // Muestra el icono de PDF si el mimeType es PDF, de lo contrario un icono genérico
                                 if (mimeTypeArchivo?.contains("pdf") == true) {
                                     Icon(Icons.Default.PictureAsPdf, null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.error)
                                 } else {
@@ -228,12 +220,11 @@ fun RegistrarHorarioScreen(
                             scope.launch {
                                 try {
                                     val iaService = HorarioIAService(apiKey)
-                                    // CORREGIDO: Se usa 'semestre' en lugar de 'sem'
                                     val res = iaService.procesarImagenHorario(
                                         imagenBase64 = archivoBase64!!,
                                         mimeType = mimeTypeArchivo!!,
                                         cursosExistentes = cursos,
-                                        semestre = semestre // <-- CORRECCIÓN APLICADA
+                                        semestre = semestre
                                     )
                                     resultado = res
                                 } catch (e: Exception) {

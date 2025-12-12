@@ -220,7 +220,7 @@ fun CalendarioMensualScreen(
         }
     }
 
-    // NUEVO: Diálogo mejorado para registrar asistencia por clase individual
+
     diaSeleccionado?.let { dia ->
         val fechaStr = SimpleDateFormat("EEEE d 'de' MMMM", Locale("es", "ES")).format(dia.time)
         val diaSemana = DiaSemana.fromCalendar(dia.get(Calendar.DAY_OF_WEEK))
@@ -424,11 +424,11 @@ private fun CalendarioGrid(
                 var colorFondo = if (esHoy) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                 var colorTexto = if (esHoy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
 
-                // NUEVO: Cálculo mejorado del color según asistencias por clase
+
                 if (clasesHoy.isNotEmpty()) {
                     val asistenciasHoy = gestorAsistencia.obtenerAsistenciasPorFecha("", fechaActual.timeInMillis, fechaActual.timeInMillis)
 
-                    // Contar clases con asistencia registrada
+
                     val clasesConAsistencia = clasesHoy.count { clase ->
                         asistenciasHoy.any { asist ->
                             asist.getIdCurso() == clase.idCurso && asist.getEstado() != EstadoAsistencia.CLASE_CANCELADA
@@ -442,9 +442,7 @@ private fun CalendarioGrid(
                             }
                         }
 
-                        // Verde: Todas las clases marcadas como presente
-                        // Amarillo: Algunas presentes, otras ausentes
-                        // Rojo: Todas marcadas como ausente
+
                         when {
                             clasesPresente == clasesConAsistencia && clasesConAsistencia == clasesHoy.size -> {
                                 colorFondo = Color(0xFF4CAF50); colorTexto = Color.White

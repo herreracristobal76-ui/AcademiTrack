@@ -30,7 +30,7 @@ class PersistenciaLocal(private val context: Context) {
                     put("idSemestre", curso.getIdSemestre() ?: "")
                     put("notaFinal", curso.getNotaFinal() ?: 0.0)
                     put("fechaArchivado", curso.getFechaArchivado() ?: 0L)
-                    put("color", curso.getColor()) // NUEVO: Guardar color
+                    put("color", curso.getColor())
                 }
                 jsonArray.put(jsonObj)
             }
@@ -81,7 +81,7 @@ class PersistenciaLocal(private val context: Context) {
                 val idSemestre = obj.optString("idSemestre", "").takeIf { it.isNotEmpty() }
                 val notaFinal = obj.optDouble("notaFinal").takeIf { it != 0.0 }
                 val fechaArchivado = obj.optLong("fechaArchivado").takeIf { it != 0L }
-                val color = obj.optString("color", "#4F46E5") // NUEVO: Cargar color
+                val color = obj.optString("color", "#4F46E5")
 
                 val curso = Curso(
                     idCurso = obj.getString("id"),
@@ -107,7 +107,7 @@ class PersistenciaLocal(private val context: Context) {
         }
     }
 
-    // ... (El resto de funciones se mantienen igual, pero las incluyo completas para evitar errores)
+
     fun guardarHorarios(clases: List<ClaseHorario>): Boolean {
         return try {
             val jsonArray = JSONArray()

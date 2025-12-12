@@ -46,14 +46,14 @@ class GestorNotas {
         } else false
     }
 
-    // ESTAS DOS FUNCIONES SON CRÍTICAS PARA QUE NO TE DE ERROR
+
     fun eliminarEvaluacion(idEvaluacion: String): Boolean {
         return evaluaciones.remove(idEvaluacion) != null
     }
 
     fun actualizarEvaluacion(evaluacionActualizada: Evaluacion): Boolean {
         return if (evaluacionActualizada.validar()) {
-            // Simplemente reemplazamos la entrada existente con la actualizada, usando su ID
+
             evaluaciones[evaluacionActualizada.getId()] = evaluacionActualizada
             true
         } else false

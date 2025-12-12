@@ -61,21 +61,21 @@ dependencies {
     implementation("androidx.compose.ui:ui:1.6.0")
     implementation("androidx.compose.material3:material3:1.2.0")
 
-    // CameraX
+
     implementation("androidx.camera:camera-camera2:1.3.1")
     implementation("androidx.camera:camera-lifecycle:1.3.1")
     implementation("androidx.camera:camera-view:1.3.1")
 
-    // Coil
+
     implementation("io.coil-kt:coil-compose:2.5.0")
 
-    // OkHttp
+
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    // WorkManager para notificaciones programadas
+
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
-    // Coroutines (si no está ya)
+
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
     implementation("androidx.compose.material:material-icons-core:1.7.8")

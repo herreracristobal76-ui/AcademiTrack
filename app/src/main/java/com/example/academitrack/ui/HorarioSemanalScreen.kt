@@ -91,7 +91,7 @@ fun HorarioSemanalScreen(
         }
     }
 
-    // Diálogo Eliminar
+
     mostrarDialogoEliminar?.let { clase ->
         AlertDialog(
             onDismissRequest = { mostrarDialogoEliminar = null },
@@ -102,7 +102,7 @@ fun HorarioSemanalScreen(
         )
     }
 
-    // Diálogo Asistencia
+
     claseSeleccionadaParaAsistencia?.let { clase ->
         AlertDialog(
             onDismissRequest = { claseSeleccionadaParaAsistencia = null },
@@ -126,7 +126,7 @@ fun ClaseItemModerno(clase: ClaseHorario, onClick: () -> Unit, onEliminar: () ->
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Columna Hora
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.width(50.dp)
@@ -138,7 +138,6 @@ fun ClaseItemModerno(clase: ClaseHorario, onClick: () -> Unit, onEliminar: () ->
 
         Spacer(Modifier.width(12.dp))
 
-        // Bloque de Color y Contenido
         Box(
             modifier = Modifier
                 .weight(1f)

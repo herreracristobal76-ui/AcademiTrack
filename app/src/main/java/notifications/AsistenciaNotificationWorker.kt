@@ -14,32 +14,28 @@ import com.academitrack.app.R
 import com.academitrack.app.domain.EstadoAsistencia
 import java.util.concurrent.TimeUnit
 
-/**
- * Worker que se ejecuta diariamente para recordar registrar asistencia
- *
- * UBICACIÓN: app/src/main/java/com/academitrack/app/notifications/AsistenciaNotificationWorker.kt
- */
+
 class AsistenciaNotificationWorker(
     private val context: Context,
     workerParams: WorkerParameters
 ) : Worker(context, workerParams) {
 
     override fun doWork(): Result {
-        // Obtener el nombre del curso desde los datos del worker
+
         val cursoNombre = inputData.getString(KEY_CURSO_NOMBRE) ?: "tu curso"
         val cursoId = inputData.getString(KEY_CURSO_ID) ?: ""
 
-        // Crear y mostrar la notificación
+
         mostrarNotificacion(cursoNombre, cursoId)
 
         return Result.success()
     }
 
     private fun mostrarNotificacion(cursoNombre: String, cursoId: String) {
-        // Crear el canal de notificación (necesario para Android 8.0+)
+
         crearCanalNotificacion()
 
-        // Intent para abrir la app cuando se toque la notificación
+
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             putExtra(EXTRA_CURSO_ID, cursoId)
@@ -53,7 +49,7 @@ class AsistenciaNotificationWorker(
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        // Construir la notificación
+
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification) // Necesitarás crear este icono
             .setContentTitle("📚 $cursoNombre")
@@ -77,7 +73,7 @@ class AsistenciaNotificationWorker(
             )
             .build()
 
-        // Mostrar la notificación
+
         with(NotificationManagerCompat.from(context)) {
             notify(cursoId.hashCode(), notification)
         }
@@ -123,14 +119,12 @@ class AsistenciaNotificationWorker(
         const val EXTRA_ESTADO_ASISTENCIA = "extra_estado_asistencia"
         const val WORK_TAG = "asistencia_notification"
 
-        /**
-         * Programa una notificación diaria para un curso específico
-         */
+
         fun programarNotificacionDiaria(
             context: Context,
             cursoId: String,
             cursoNombre: String,
-            hora: Int = 20, // 8 PM por defecto
+            hora: Int = 20,
             minuto: Int = 0
         ) {
             val data = Data.Builder()
@@ -138,14 +132,14 @@ class AsistenciaNotificationWorker(
                 .putString(KEY_CURSO_NOMBRE, cursoNombre)
                 .build()
 
-            // Calcular el delay inicial hasta la hora programada
+
             val currentTime = System.currentTimeMillis()
             val calendar = java.util.Calendar.getInstance().apply {
                 set(java.util.Calendar.HOUR_OF_DAY, hora)
                 set(java.util.Calendar.MINUTE, minuto)
                 set(java.util.Calendar.SECOND, 0)
 
-                // Si ya pasó la hora de hoy, programar para mañana
+
                 if (timeInMillis <= currentTime) {
                     add(java.util.Calendar.DAY_OF_YEAR, 1)
                 }
@@ -153,7 +147,7 @@ class AsistenciaNotificationWorker(
 
             val initialDelay = calendar.timeInMillis - currentTime
 
-            // Crear la solicitud de trabajo periódico
+
             val workRequest = PeriodicWorkRequestBuilder<AsistenciaNotificationWorker>(
                 1, TimeUnit.DAYS
             )
@@ -175,17 +169,13 @@ class AsistenciaNotificationWorker(
                 )
         }
 
-        /**
-         * Cancela las notificaciones para un curso específico
-         */
+
         fun cancelarNotificaciones(context: Context, cursoId: String) {
             WorkManager.getInstance(context)
                 .cancelUniqueWork("asistencia_$cursoId")
         }
 
-        /**
-         * Cancela todas las notificaciones de asistencia
-         */
+
         fun cancelarTodasNotificaciones(context: Context) {
             WorkManager.getInstance(context)
                 .cancelAllWorkByTag(WORK_TAG)

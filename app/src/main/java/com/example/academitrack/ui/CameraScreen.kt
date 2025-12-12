@@ -58,7 +58,7 @@ fun CameraScreen(
         hasCameraPermission = isGranted
     }
 
-    // Launcher para seleccionar imagen de galería (más confiable que cámara)
+
     val pickImageLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -78,7 +78,7 @@ fun CameraScreen(
         }
     }
 
-    // Launcher para capturar foto con cámara
+
     val takePictureLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicturePreview()
     ) { bitmap: Bitmap? ->

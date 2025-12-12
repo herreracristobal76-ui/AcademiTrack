@@ -16,9 +16,6 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
-/**
- * 🚀 VERSIÓN OPTIMIZADA - Usa modelos más rápidos y precisos
- */
 class HorarioIAService(private val apiKey: String) {
 
     private val client = OkHttpClient.Builder()
@@ -29,8 +26,8 @@ class HorarioIAService(private val apiKey: String) {
 
     companion object {
         private const val TAG = "HorarioIA"
-        private const val MAX_IMAGE_SIZE = 1600 // Mejor calidad
-        private const val JPEG_QUALITY = 90      // Mejor reconocimiento
+        private const val MAX_IMAGE_SIZE = 1600
+        private const val JPEG_QUALITY = 90
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
         private const val MAX_REINTENTOS = 3
         private const val DELAY_BASE_MS = 5000L
@@ -38,18 +35,18 @@ class HorarioIAService(private val apiKey: String) {
 
     suspend fun procesarImagenHorario(
         imagenBase64: String,
-        mimeType: String, // <<-- CORRECCIÓN CLAVE: Agregando el MIME Type
+        mimeType: String,
         cursosExistentes: List<Curso>,
         semestre: Semestre
     ): ResultadoHorarioConCursos = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "🔍 Procesando horario para ${semestre.obtenerNombre()} (MIME: $mimeType)")
 
-            // Solo optimizar la imagen si es una imagen JPEG o PNG estándar.
+
             val imagenParaEnvio = if (mimeType.startsWith("image") && (mimeType.contains("jpeg") || mimeType.contains("png"))) {
                 optimizarImagen(imagenBase64)
             } else {
-                // PDF o cualquier otro tipo de archivo se envía sin optimizar
+
                 imagenBase64
             }
 
@@ -97,12 +94,12 @@ class HorarioIAService(private val apiKey: String) {
                 • Si no hay datos, la clave "cursos" debe ser un array vacío: [].
             """.trimIndent()
 
-            // 🎯 MODELOS OPTIMIZADOS Y CORREGIDOS
+
             val modelos = listOf(
-                "gemini-2.5-flash",
-                "gemini-flash-latest",
-                "gemini-2.0-flash-001",
-                "gemini-2.5-pro"
+                "models/gemini-2.5-flash",
+                "models/gemini-flash-latest",
+                "models/gemini-2.0-flash-001",
+                "models/gemini-2.5-pro"
             )
 
             Log.d(TAG, "🎯 Estrategia: Probar ${modelos.size} modelos optimizados")
@@ -120,7 +117,7 @@ class HorarioIAService(private val apiKey: String) {
                     val resultado = intentarConReintentos(
                         modelo = modelo,
                         imagenBase64 = imagenParaEnvio,
-                        mimeType = mimeType, // <<-- CORRECCIÓN CLAVE: Pasando el MIME Type
+                        mimeType = mimeType,
                         prompt = prompt,
                         cursosExistentes = cursosExistentes,
                         semestre = semestre
@@ -154,7 +151,7 @@ class HorarioIAService(private val apiKey: String) {
                 }
             }
 
-            // Mensaje de error final acortado
+
             throw Exception("""
                 ❌ ERROR: No se pudo procesar el documento.
                 
@@ -180,7 +177,7 @@ class HorarioIAService(private val apiKey: String) {
     private suspend fun intentarConReintentos(
         modelo: String,
         imagenBase64: String,
-        mimeType: String, // <<-- CORRECCIÓN CLAVE: Agregando el MIME Type
+        mimeType: String,
         prompt: String,
         cursosExistentes: List<Curso>,
         semestre: Semestre,
@@ -214,7 +211,7 @@ class HorarioIAService(private val apiKey: String) {
         modelo: String,
         imagenBase64: String,
         prompt: String,
-        mimeType: String, // <<-- CORRECCIÓN CLAVE: Agregando el MIME Type
+        mimeType: String,
         cursosExistentes: List<Curso>,
         semestre: Semestre
     ): ResultadoHorarioConCursos {
@@ -227,7 +224,7 @@ class HorarioIAService(private val apiKey: String) {
                         put(JSONObject().apply { put("text", prompt) })
                         put(JSONObject().apply {
                             put("inline_data", JSONObject().apply {
-                                put("mime_type", mimeType) // <<-- CORRECCIÓN CLAVE: Usando el MIME Type dinámico
+                                put("mime_type", mimeType)
                                 put("data", imagenBase64)
                             })
                         })
@@ -266,11 +263,14 @@ class HorarioIAService(private val apiKey: String) {
         if (!response.isSuccessful) {
             Log.e(TAG, "❌ Error HTTP ${response.code}: $responseBody")
 
-            // Mensajes de error acortados
+
             val errorMsg = when (response.code) {
                 400 -> "❌ ERROR 400: Imagen corrupta o inválida. Intenta recortar o usar JPG."
                 401 -> "❌ ERROR 401: API Key inválida. Revisa tu clave en MainActivity.kt."
-                403 -> "❌ ERROR 403: Sin permisos. Revisa tu cuenta de Google Cloud."
+                403 -> {
+
+                    "❌ ERROR 403 (Prohibido): Tu clave API no tiene permisos. SOLUCIÓN: Verifica que el Billing esté activado en tu cuenta de Google Cloud."
+                }
                 404 -> "❌ ERROR 404: Modelo $modelo no disponible."
                 429 -> {
                     val retryAfter = response.header("Retry-After")?.toLongOrNull() ?: 60
@@ -323,7 +323,7 @@ class HorarioIAService(private val apiKey: String) {
             val cursosArray = datos.optJSONArray("cursos")
 
             if (cursosArray == null || cursosArray.length() == 0) {
-                // Mensaje acortado
+
                 throw Exception("ERROR: No se detectó una tabla de horarios válida en el documento.")
             }
 
@@ -384,7 +384,7 @@ class HorarioIAService(private val apiKey: String) {
 
                 } catch (e: Exception) {
                     Log.w(TAG, "Error procesando curso $i", e)
-                    // Mensaje acortado
+
                     if (cursosArray.length() == 1) {
                         throw Exception("ERROR de clase: Falla al procesar los datos de una clase. Documento ilegible o JSON incompleto.")
                     }
@@ -392,7 +392,7 @@ class HorarioIAService(private val apiKey: String) {
             }
 
             if (todasLasClases.isEmpty()) {
-                // Mensaje acortado
+
                 throw Exception("ERROR: No se pudo extraer ninguna clase válida. Intenta con una imagen más nítida.")
             }
 

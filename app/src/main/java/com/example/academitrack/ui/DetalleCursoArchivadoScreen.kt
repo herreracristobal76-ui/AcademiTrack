@@ -51,7 +51,7 @@ fun DetalleCursoArchivadoScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Estado del curso
+
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -107,7 +107,7 @@ fun DetalleCursoArchivadoScreen(
                 }
             }
 
-            // Información del curso
+
             item {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -123,7 +123,7 @@ fun DetalleCursoArchivadoScreen(
                 }
             }
 
-            // Estadísticas finales
+
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -179,7 +179,7 @@ fun DetalleCursoArchivadoScreen(
                 }
             }
 
-            // Evaluaciones
+
             item {
                 Text(
                     text = "Evaluaciones (${evaluaciones.size})",
@@ -191,7 +191,7 @@ fun DetalleCursoArchivadoScreen(
                 EvaluacionCard(eval)
             }
 
-            // Botón reactivar
+
             item {
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedButton(

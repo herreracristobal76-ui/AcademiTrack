@@ -50,7 +50,7 @@ fun ConfigurarNotificacionesScreen(
         tienePermiso = isGranted
     }
 
-    // Cargar configuraciones guardadas
+
     val configuraciones = remember {
         mutableStateMapOf<String, NotificacionConfig>().apply {
             cursos.forEach { curso ->
@@ -301,7 +301,7 @@ fun TimePickerDialog(
 
                     Text(":", style = MaterialTheme.typography.headlineMedium)
 
-                    // Selector de minuto
+
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         IconButton(onClick = { minuto = (minuto + 15) % 60 }) {
                             Text("▲")

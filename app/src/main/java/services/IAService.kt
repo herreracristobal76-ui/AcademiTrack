@@ -12,10 +12,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-/**
- * VERSIÓN FINAL - Compatible con Gemini 2.0, 2.5 y 3.0
- * Actualizado: Diciembre 2024
- */
+
 class IAService(private val apiKey: String) {
 
     private val client = OkHttpClient.Builder()
@@ -54,7 +51,7 @@ class IAService(private val apiKey: String) {
                 Si no encuentras un dato, usa null.
             """.trimIndent()
 
-            // Modelos compatibles con tu cuenta (en orden de preferencia)
+
             val modelos = listOf(
                 "gemini-2.5-flash",           // ⭐ Mejor opción
                 "gemini-flash-latest",        // ⭐ Siempre actualizado
@@ -84,7 +81,7 @@ class IAService(private val apiKey: String) {
                 }
             }
 
-            // Si llegamos aquí, ningún modelo funcionó
+
             throw Exception("""
                 ❌ No se pudo procesar la imagen
                 

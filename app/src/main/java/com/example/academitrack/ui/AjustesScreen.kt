@@ -32,7 +32,7 @@ fun AjustesScreen(
     val context = LocalContext.current
     val persistencia = remember { PersistenciaLocal(context) }
 
-    // Launcher para GUARDAR archivo (Exportar)
+
     val exportarLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri: Uri? ->
@@ -50,7 +50,7 @@ fun AjustesScreen(
         }
     }
 
-    // Launcher para ABRIR archivo (Importar)
+
     val importarLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -99,7 +99,7 @@ fun AjustesScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Sección General
+
             Text(
                 "General",
                 style = MaterialTheme.typography.labelLarge,
@@ -162,7 +162,7 @@ fun AjustesScreen(
                 }
             }
 
-            // Sección de Datos (NUEVA)
+
             Text(
                 "Datos y Seguridad",
                 style = MaterialTheme.typography.labelLarge,
@@ -171,7 +171,7 @@ fun AjustesScreen(
 
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column {
-                    // Botón Exportar
+
                     ListItem(
                         headlineContent = { Text("Exportar Copia de Seguridad") },
                         supportingContent = { Text("Guarda todos tus datos en un archivo") },
@@ -182,7 +182,7 @@ fun AjustesScreen(
                         }
                     )
                     Divider()
-                    // Botón Importar
+
                     ListItem(
                         headlineContent = { Text("Restaurar Datos") },
                         supportingContent = { Text("Recupera tus datos desde un archivo") },
@@ -196,7 +196,7 @@ fun AjustesScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Información App
+
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(

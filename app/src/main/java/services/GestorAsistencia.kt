@@ -6,21 +6,18 @@ class GestorAsistencia {
 
     private val asistencias = mutableMapOf<String, Asistencia>()
 
-    /**
-     * Registra una asistencia nueva o actualiza la existente si ya se marcó ese día.
-     * Esto soluciona el problema de no poder cambiar de "Presente" a "Faltó".
-     */
+
     fun registrarOActualizar(idCurso: String, fecha: Long, estado: EstadoAsistencia) {
-        // Buscamos si ya existe un registro para este curso en esta fecha exacta
+
         val existente = asistencias.values.find {
             it.getIdCurso() == idCurso && it.getFecha() == fecha
         }
 
         if (existente != null) {
-            // Si existe, solo actualizamos el estado
+
             existente.setEstado(estado)
         } else {
-            // Si no existe, creamos uno nuevo
+
             val nueva = Asistencia(
                 idAsistencia = "asist_${System.currentTimeMillis()}",
                 idCurso = idCurso,

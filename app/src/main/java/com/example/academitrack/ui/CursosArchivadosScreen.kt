@@ -80,7 +80,7 @@ fun CursosArchivadosScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Estadísticas
+
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -110,7 +110,7 @@ fun CursosArchivadosScreen(
                     }
                 }
 
-                // Aprobados
+
                 if (aprobados.isNotEmpty()) {
                     item {
                         Text(
@@ -124,7 +124,7 @@ fun CursosArchivadosScreen(
                     }
                 }
 
-                // Reprobados
+
                 if (reprobados.isNotEmpty()) {
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
@@ -139,7 +139,7 @@ fun CursosArchivadosScreen(
                     }
                 }
 
-                // Retirados
+
                 if (retirados.isNotEmpty()) {
                     item {
                         Spacer(modifier = Modifier.height(8.dp))

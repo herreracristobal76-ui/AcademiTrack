@@ -30,10 +30,8 @@ class MainActivity : ComponentActivity() {
     private val gestorHorario = GestorHorario()
     private lateinit var persistencia: PersistenciaLocal
 
-    // 🔑 MULTI-API-KEY: Agrega todas las API Keys que quieras
-    // Crea más en: https://aistudio.google.com/app/apikey
-    private val apiKeys = listOf( // Tu API Key actual
-        "AIzaSyA9eOAua2Fh5GuEoMD2G618dJNuKrEz-24"                  // API Key 4
+    private val apiKeys = listOf(
+        "AIzaSyD7EUi4eVHhNsLeoDN1Z5dksFACtPlhU64"
     )
     init {
         if (apiKeys.size == 1) {
@@ -42,7 +40,7 @@ class MainActivity : ComponentActivity() {
             android.util.Log.i("MainActivity", "✅ Usando ${apiKeys.size} API Keys (${apiKeys.size * 15} req/min)")
         }
     }
-    // 🔄 Rotación automática de API Keys
+
     private var currentKeyIndex = 0
 
     private fun getNextApiKey(): String {
@@ -51,14 +49,14 @@ class MainActivity : ComponentActivity() {
         return key
     }
 
-    // Solo necesitas cambiar el setContent en MainActivity.kt
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         persistencia = PersistenciaLocal(this)
 
-        // Cargar datos
+
         val evaluacionesGuardadas = persistencia.cargarEvaluaciones()
         evaluacionesGuardadas.forEach { (_, eval) -> gestorNotas.agregarEvaluacion(eval) }
         gestorAsistencia.cargarAsistencias(persistencia.cargarAsistencias())
@@ -70,7 +68,6 @@ class MainActivity : ComponentActivity() {
 
             AcademiTrackTheme(darkTheme = modoOscuro) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    // ⚡ OPTIMIZADO: Crossfade más rápido (400ms)
                     Crossfade(targetState = mostrarSplash, animationSpec = tween(400), label = "Splash") { isSplash ->
                         if (isSplash) SplashScreen { mostrarSplash = false }
                         else AcademiTrackApp(
@@ -103,7 +100,7 @@ fun AcademiTrackApp(
     persistencia: PersistenciaLocal,
     modoOscuro: Boolean,
     onCambiarModo: (Boolean) -> Unit,
-    onGetApiKey: () -> String  // 🔑 NUEVO: Función para obtener API Key
+    onGetApiKey: () -> String
 ) {
     var pantallaActual by remember { mutableStateOf("cursos") }
     var cursoSeleccionado by remember { mutableStateOf<Curso?>(null) }
@@ -257,8 +254,6 @@ fun AcademiTrackApp(
                 "editar_nota" -> cursoSeleccionado?.let { curso ->
                     evaluacionAEditar?.let { eval ->
                         val totalEvaluado = gestorNotas.calcularPorcentajeTotal(curso.getId())
-                        // Pasamos el porcentaje que no está siendo usado por OTRAS evaluaciones.
-                        // La pantalla de edición sumará el porcentaje de la evaluación actual.
                         val maxDisponible = 100.0 - totalEvaluado
 
                         EditarNotaScreen(
@@ -269,7 +264,6 @@ fun AcademiTrackApp(
                                 pantallaActual = "detalle"
                             }
                         ) { evalActualizada ->
-                            // Lógica de guardado
                             gestorNotas.actualizarEvaluacion(evalActualizada)
                             persistencia.guardarEvaluaciones(gestorNotas.obtenerTodasEvaluaciones())
 
@@ -280,7 +274,6 @@ fun AcademiTrackApp(
                         }
                     }
                 }
-
 
                 "agregar_nota" -> cursoSeleccionado?.let { curso ->
                     val disp = 100.0 - gestorNotas.calcularPorcentajeTotal(curso.getId())
@@ -294,7 +287,6 @@ fun AcademiTrackApp(
                     }
                 }
 
-                // 🔑 Usar API Key dinámica
                 "camera" -> cursoSeleccionado?.let { curso ->
                     CameraScreen(curso, onGetApiKey(), { pantallaActual = "detalle" }) { eval ->
                         gestorNotas.agregarEvaluacion(eval)
@@ -343,7 +335,6 @@ fun AcademiTrackApp(
                 "notificaciones" -> ConfigurarNotificacionesScreen(cursos.filter { it.estaActivo() }, { pantallaActual = "ajustes" }, persistencia)
                 "seleccionar_semestre" -> SeleccionarSemestreScreen({ pantallaActual = "calendario_mensual" }) { s -> semestreSeleccionado = s; pantallaActual = "registrar_horario" }
 
-                // 🔑 Usar API Key dinámica
                 "registrar_horario" -> semestreSeleccionado?.let { sem ->
                     RegistrarHorarioScreen(onGetApiKey(), cursos.filter { it.estaActivo() }, sem, { pantallaActual = "seleccionar_semestre" }) { res ->
                         res.cursosNuevos.forEach { cursos.add(it) }

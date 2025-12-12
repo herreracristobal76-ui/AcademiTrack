@@ -42,7 +42,7 @@ fun ArchivarCursoScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Información del curso
+
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -67,7 +67,7 @@ fun ArchivarCursoScreen(
                 }
             }
 
-            // Explicación
+
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -94,13 +94,13 @@ fun ArchivarCursoScreen(
                 }
             }
 
-            // Selección de estado
+
             Text(
                 text = "Selecciona el estado final del curso:",
                 style = MaterialTheme.typography.titleMedium
             )
 
-            // Botón Aprobado
+
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = { estadoSeleccionado = EstadoCurso.APROBADO },
@@ -138,7 +138,7 @@ fun ArchivarCursoScreen(
                 }
             }
 
-            // Botón Reprobado
+
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = { estadoSeleccionado = EstadoCurso.REPROBADO },
@@ -176,7 +176,7 @@ fun ArchivarCursoScreen(
                 }
             }
 
-            // Botón Retirado
+
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = { estadoSeleccionado = EstadoCurso.RETIRADO },
@@ -214,7 +214,7 @@ fun ArchivarCursoScreen(
                 }
             }
 
-            // Campo nota final (solo para Aprobado y Reprobado)
+
             if (estadoSeleccionado == EstadoCurso.APROBADO || estadoSeleccionado == EstadoCurso.REPROBADO) {
                 OutlinedTextField(
                     value = notaFinal,
@@ -245,7 +245,7 @@ fun ArchivarCursoScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Botón confirmar
+
             Button(
                 onClick = {
                     if (estadoSeleccionado == null) {

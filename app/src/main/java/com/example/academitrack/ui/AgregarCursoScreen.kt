@@ -26,23 +26,23 @@ import com.academitrack.app.domain.*
 @Composable
 fun AgregarCursoScreen(
     onVolverClick: () -> Unit,
-    onGuardar: (Curso, List<ClaseHorario>) -> Unit // Modificado para devolver horarios
+    onGuardar: (Curso, List<ClaseHorario>) -> Unit
 ) {
     var nombre by remember { mutableStateOf("") }
     var codigo by remember { mutableStateOf("") }
     var asistenciaMinima by remember { mutableStateOf("75") }
 
-    // VALOR FIJO REQUERIDO: 4.0
+
     val notaMinimaRequerida = 4.0
 
-    // Validación en tiempo real (Asistencia: 75 a 100, sin decimales)
+
     val asistVal = asistenciaMinima.toIntOrNull()
     val esAsistenciaInvalida = asistVal == null || asistVal < 75 || asistVal > 100
 
-    // Lista temporal de horarios que vamos agregando
+
     val horariosAgregados = remember { mutableStateListOf<ClaseHorario>() }
     var mostrarDialogoHorario by remember { mutableStateOf(false) }
-    var showError by remember { mutableStateOf(false) } // Usado para mostrar error en la parte inferior
+    var showError by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -93,7 +93,7 @@ fun AgregarCursoScreen(
                     OutlinedTextField(
                         value = asistenciaMinima,
                         onValueChange = {
-                            // CAMBIO: Solo permitir números naturales (dígitos)
+
                             if (it.all { char -> char.isDigit() } && it.length <= 3) {
                                 asistenciaMinima = it
                             }
@@ -115,20 +115,20 @@ fun AgregarCursoScreen(
                     // Campo de Nota Mínima como de solo lectura
                     OutlinedTextField(
                         value = notaMinimaRequerida.toString(),
-                        onValueChange = { /* Deshabilitado */ },
-                        readOnly = true, // Evita la edición
+                        onValueChange = {  },
+                        readOnly = true,
                         label = { Text("Nota Mín (Requerida)") },
                         placeholder = { Text("4.0") },
                         modifier = Modifier.weight(1f),
                         isError = false,
                         supportingText = {
-                            Text("Requerida: 4.0") // Muestra el valor fijo
+                            Text("Requerida: 4.0")
                         }
                     )
                 }
             }
 
-            // Sección Horarios
+
             item {
                 Divider(modifier = Modifier.padding(vertical = 8.dp))
                 Row(
@@ -173,10 +173,10 @@ fun AgregarCursoScreen(
                 Button(
                     onClick = {
                         val asist = asistenciaMinima.toDoubleOrNull()
-                        // Usamos la constante fija
+
                         val notaMin = notaMinimaRequerida
 
-                        // Validación de campos obligatorios y rangos
+
                         val hayErroresDeValidacion = nombre.isBlank() || codigo.isBlank() ||
                                 esAsistenciaInvalida
 
@@ -186,9 +186,9 @@ fun AgregarCursoScreen(
                                 idCurso = "curso_${System.currentTimeMillis()}",
                                 nombre = nombre,
                                 codigo = codigo,
-                                // La conversión a Double es necesaria para el objeto Curso, pero se valida como Int
+
                                 porcentajeAsistenciaMinimo = asist,
-                                notaMinimaAprobacion = notaMin // Usamos la constante 4.0
+                                notaMinimaAprobacion = notaMin
                             )
 
                             // Asignar el ID del curso a los horarios creados
@@ -196,7 +196,7 @@ fun AgregarCursoScreen(
                                 it.copy(
                                     idCurso = nuevoCurso.getId(),
                                     nombreCurso = nuevoCurso.getNombre(),
-                                    color = generarColor(nuevoCurso.getNombre()) // Color consistente
+                                    color = generarColor(nuevoCurso.getNombre())
                                 )
                             }
 
@@ -207,7 +207,7 @@ fun AgregarCursoScreen(
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(50.dp),
-                    // Deshabilitar botón si los campos obligatorios están vacíos o hay errores de rango
+
                     enabled = nombre.isNotBlank() && codigo.isNotBlank() && !esAsistenciaInvalida
                 ) {
                     Text("Guardar Curso")
@@ -275,7 +275,7 @@ fun DialogAgregarHorario(onDismiss: () -> Unit, onConfirm: (ClaseHorario) -> Uni
             Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Agregar Horario", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
 
-                // Selector de Día
+
                 ExposedDropdownMenuBox(expanded = expandedDia, onExpandedChange = { expandedDia = !expandedDia }) {
                     OutlinedTextField(
                         value = diaSeleccionado.nombre,
@@ -330,7 +330,7 @@ fun DialogAgregarHorario(onDismiss: () -> Unit, onConfirm: (ClaseHorario) -> Uni
                                 onConfirm(
                                     ClaseHorario(
                                         id = "clase_temp_${System.currentTimeMillis()}",
-                                        idCurso = "", // Se asigna al guardar el curso
+                                        idCurso = "",
                                         nombreCurso = "",
                                         sala = sala.ifBlank { "Sin sala" },
                                         profesor = "",
@@ -350,7 +350,7 @@ fun DialogAgregarHorario(onDismiss: () -> Unit, onConfirm: (ClaseHorario) -> Uni
     }
 }
 
-// Función auxiliar para color (copia simple de la que tienes en el servicio)
+
 fun generarColor(nombre: String): String {
     val colores = listOf("#6200EE", "#03DAC6", "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8")
     return colores[Math.abs(nombre.hashCode()) % colores.size]

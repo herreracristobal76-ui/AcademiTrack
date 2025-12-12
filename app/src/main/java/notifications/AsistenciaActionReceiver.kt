@@ -20,14 +20,14 @@ class AsistenciaActionReceiver : BroadcastReceiver() {
         try {
             val estado = EstadoAsistencia.valueOf(estadoStr)
 
-            // Registrar la asistencia
+
             registrarAsistencia(context, cursoId, estado)
 
-            // Cancelar la notificación
+
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.cancel(cursoId.hashCode())
 
-            // Mostrar confirmación al usuario
+
             val mensaje = when (estado) {
                 EstadoAsistencia.PRESENTE -> "✅ Asistencia registrada"
                 EstadoAsistencia.AUSENTE -> "❌ Falta registrada"
@@ -45,21 +45,21 @@ class AsistenciaActionReceiver : BroadcastReceiver() {
         val persistencia = PersistenciaLocal(context)
         val gestorAsistencia = GestorAsistencia()
 
-        // Cargar asistencias existentes
+
         val asistenciasExistentes = persistencia.cargarAsistencias()
         gestorAsistencia.cargarAsistencias(asistenciasExistentes)
 
-        // Verificar si ya existe asistencia para hoy
+
         val hoy = obtenerFechaHoy()
         val asistenciaHoy = asistenciasExistentes.values.find {
             it.getIdCurso() == cursoId && esMismaFecha(it.getFecha(), hoy)
         }
 
         if (asistenciaHoy != null) {
-            // Actualizar estado si ya existe
+
             gestorAsistencia.actualizarEstadoAsistencia(asistenciaHoy.getId(), estado)
         } else {
-            // Crear nueva asistencia
+
             val nuevaAsistencia = Asistencia(
                 idAsistencia = "asist_${System.currentTimeMillis()}",
                 idCurso = cursoId,
@@ -69,7 +69,7 @@ class AsistenciaActionReceiver : BroadcastReceiver() {
             gestorAsistencia.registrarAsistencia(nuevaAsistencia)
         }
 
-        // Guardar cambios
+
         persistencia.guardarAsistencias(gestorAsistencia.obtenerTodasAsistencias())
     }
 

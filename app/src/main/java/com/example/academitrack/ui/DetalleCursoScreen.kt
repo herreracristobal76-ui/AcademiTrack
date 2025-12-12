@@ -41,7 +41,7 @@ fun DetalleCursoScreen(
     onEliminarCurso: () -> Unit,
     onArchivarCurso: () -> Unit,
     onEliminarEvaluacion: (Evaluacion) -> Unit,
-    onColorChanged: (String) -> Unit, // NUEVO CALLBACK
+    onColorChanged: (String) -> Unit,
     onEditarEvaluacion: (Evaluacion) -> Unit
 ) {
     var mostrarMenu by remember { mutableStateOf(false) }
@@ -59,7 +59,7 @@ fun DetalleCursoScreen(
     val evaluaciones = gestorNotas.obtenerEvaluacionesPorCurso(curso.getId())
     val proyeccion = gestorNotas.calcularNotaNecesaria(curso.getId(), curso.getNotaMinimaAprobacion(), curso)
 
-    // Usar el color del curso
+
     val colorCurso = try { Color(android.graphics.Color.parseColor(curso.getColor())) } catch(e: Exception) { MaterialTheme.colorScheme.primary }
 
     Scaffold(
@@ -137,7 +137,7 @@ fun DetalleCursoScreen(
                 }
             }
 
-            // Resumen
+
             item {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     StatCard(
@@ -158,7 +158,7 @@ fun DetalleCursoScreen(
                 }
             }
 
-            // Proyección
+
             if (proyeccion.porcentajeRestante > 0) {
                 item {
                     Card(
@@ -186,7 +186,7 @@ fun DetalleCursoScreen(
                 }
             }
 
-            // Botones
+
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(
@@ -262,7 +262,7 @@ fun DetalleCursoScreen(
         )
     }
 
-    // Diálogo Selector de Color
+
     if (mostrarDialogoColor) {
         ColorPickerDialog(
             onDismiss = { mostrarDialogoColor = false },
@@ -277,16 +277,16 @@ fun DetalleCursoScreen(
 @Composable
 fun ColorPickerDialog(onDismiss: () -> Unit, onColorSelected: (String) -> Unit) {
     val colores = listOf(
-        "#4F46E5", // Indigo (Default)
-        "#EF4444", // Rojo
-        "#F59E0B", // Ámbar
-        "#10B981", // Verde
-        "#3B82F6", // Azul
-        "#8B5CF6", // Violeta
-        "#EC4899", // Rosa
-        "#14B8A6", // Teal
-        "#6366F1", // Indigo Claro
-        "#F97316"  // Naranja
+        "#4F46E5",
+        "#EF4444",
+        "#F59E0B",
+        "#10B981",
+        "#3B82F6",
+        "#8B5CF6",
+        "#EC4899",
+        "#14B8A6",
+        "#6366F1",
+        "#F97316"
     )
 
     Dialog(onDismissRequest = onDismiss) {
