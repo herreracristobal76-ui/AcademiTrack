@@ -152,30 +152,35 @@ class HorarioIAService(private val apiKey: String) {
             }
 
             throw Exception("""
-                ⏱️ LÍMITE DE SOLICITUDES ALCANZADO
+                ❌ TODOS LOS MODELOS FALLARON
                 
-                Has superado el límite temporal de la API de Google.
+                Ninguno de los ${modelos.size} modelos disponibles respondió.
                 
-                ✅ SOLUCIONES INMEDIATAS:
+                DIAGNÓSTICO:
+                Verifica el último error arriba en los logs (Logcat).
                 
-                1️⃣ ESPERA 1-2 MINUTOS
-                   • Es un límite temporal
-                   • Se resetea automáticamente
+                SOLUCIONES COMUNES:
                 
-                2️⃣ USA EL MODO MANUAL
-                   • Toca "Cancelar"
-                   • Agrega las clases manualmente
-                   • Es más rápido que esperar
+                1️⃣ SI ES ERROR 429 (Límite):
+                   • Espera 1-2 minutos
+                   • O agrega más API Keys en MainActivity.kt
                 
-                📊 LÍMITES DEL PLAN GRATUITO:
-                   • 15 solicitudes por minuto
-                   • 1,500 solicitudes por día
+                2️⃣ SI ES ERROR 401/403 (Permisos):
+                   • Crea nueva API Key en: https://aistudio.google.com/
+                   • Cópiala en MainActivity.kt línea 34
                 
-                💡 CONSEJO:
-                   Si usas mucho la IA, considera:
-                   • Esperar unos minutos entre análisis
-                   • Procesar varios horarios de una vez
-                   • Subir imágenes más pequeñas
+                3️⃣ SI ES ERROR 400 (Imagen):
+                   • Recorta la imagen
+                   • Toma foto más clara
+                   • Reduce el tamaño
+                
+                4️⃣ SI NO HAY INTERNET:
+                   • Verifica WiFi/Datos
+                   • Prueba en otra red
+                
+                💡 MIENTRAS TANTO:
+                Usa el modo manual (botón Cancelar) para agregar
+                las clases manualmente. Es más rápido.
             """.trimIndent())
 
         } catch (e: Exception) {
@@ -275,15 +280,98 @@ class HorarioIAService(private val apiKey: String) {
         val responseBody = response.body?.string()
 
         if (!response.isSuccessful) {
+            Log.e(TAG, "❌ Error HTTP ${response.code}: $responseBody")
+
             val errorMsg = when (response.code) {
+                400 -> """
+                    ❌ IMAGEN INVÁLIDA (400)
+                    
+                    La imagen es demasiado grande o está corrupta.
+                    
+                    SOLUCIONES:
+                    • Recorta la imagen para que sea más pequeña
+                    • Toma una foto más clara con menos zoom
+                    • Intenta con formato JPG en vez de PNG
+                """.trimIndent()
+
+                401 -> """
+                    ❌ API KEY INVÁLIDA (401)
+                    
+                    Tu API Key no funciona.
+                    
+                    SOLUCIONES:
+                    1. Ve a: https://aistudio.google.com/app/apikey
+                    2. Crea una nueva API Key
+                    3. Cópiala en MainActivity.kt línea 34:
+                       "AIzaSyA..." // <- Reemplaza aquí
+                """.trimIndent()
+
+                403 -> """
+                    ❌ SIN ACCESO (403)
+                    
+                    Tu API Key no tiene permisos para este modelo.
+                    
+                    POSIBLES CAUSAS:
+                    • Cuenta sin billing habilitado
+                    • Región bloqueada
+                    • API Key restringida
+                    
+                    SOLUCIONES:
+                    1. Verifica en: https://console.cloud.google.com/
+                    2. Habilita "Generative Language API"
+                    3. Crea una nueva API Key sin restricciones
+                """.trimIndent()
+
+                404 -> "❌ Modelo $modelo no existe (404)"
+
                 429 -> {
                     val retryAfter = response.header("Retry-After")?.toLongOrNull() ?: 60
-                    "Rate limit alcanzado. Espera ${retryAfter}s"
+                    """
+                    ⏱️ LÍMITE ALCANZADO (429)
+                    
+                    Has usado todas tus solicitudes disponibles.
+                    
+                    LÍMITES DEL PLAN GRATUITO:
+                    • 15 solicitudes por minuto
+                    • 1,500 solicitudes por día
+                    
+                    SOLUCIONES:
+                    1. Espera $retryAfter segundos
+                    2. Usa el modo manual (más rápido)
+                    3. Crea más API Keys (hasta 5 gratis)
+                    
+                    💡 CONSEJO:
+                    En MainActivity.kt puedes agregar más keys:
+                    private val apiKeys = listOf(
+                        "AIzaSy...", // Key 1
+                        "AIzaSy...", // Key 2 <- Agrega aquí
+                        "AIzaSy..."  // Key 3
+                    )
+                    """.trimIndent()
                 }
-                403 -> "Sin permisos para modelo $modelo"
-                404 -> "Modelo $modelo no disponible"
-                500, 503 -> "Error temporal del servidor"
-                else -> "Error HTTP ${response.code}"
+
+                500, 503 -> """
+                    ⚠️ ERROR DEL SERVIDOR (${response.code})
+                    
+                    Google Gemini está temporalmente caído.
+                    
+                    SOLUCIONES:
+                    • Espera 2-3 minutos
+                    • Verifica: https://status.cloud.google.com/
+                    • Usa el modo manual mientras tanto
+                """.trimIndent()
+
+                else -> """
+                    ❌ ERROR DESCONOCIDO (${response.code})
+                    
+                    Respuesta del servidor:
+                    ${responseBody?.take(200) ?: "Sin detalles"}
+                    
+                    Intenta:
+                    • Reiniciar la app
+                    • Verificar tu conexión
+                    • Crear una nueva API Key
+                """.trimIndent()
             }
             throw Exception(errorMsg)
         }
