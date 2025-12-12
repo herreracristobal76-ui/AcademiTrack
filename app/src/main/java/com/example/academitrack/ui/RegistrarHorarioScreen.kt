@@ -164,10 +164,15 @@ fun RegistrarHorarioScreen(
                             )
                         } else {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.PictureAsPdf, null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.error)
+                                // Muestra el icono de PDF si el mimeType es PDF, de lo contrario un icono genérico
+                                if (mimeTypeArchivo?.contains("pdf") == true) {
+                                    Icon(Icons.Default.PictureAsPdf, null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.error)
+                                } else {
+                                    Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.primary)
+                                }
                                 Spacer(Modifier.height(16.dp))
                                 Text(nombreArchivo ?: "Archivo cargado", style = MaterialTheme.typography.titleMedium)
-                                Text("Listo para procesar", style = MaterialTheme.typography.bodySmall)
+                                Text("Listo para procesar", style = MaterialTheme.typography.bodyMedium)
                             }
                         }
                     }
@@ -210,6 +215,7 @@ fun RegistrarHorarioScreen(
                             archivoBase64 = null
                             imagenCapturada = null
                             resultado = null
+                            mimeTypeArchivo = null
                         },
                         modifier = Modifier.weight(1f)
                     ) {
@@ -222,11 +228,12 @@ fun RegistrarHorarioScreen(
                             scope.launch {
                                 try {
                                     val iaService = HorarioIAService(apiKey)
-                                    // ✅ CORREGIDO: Ahora llama a procesarImagenHorario (la función que SÍ existe)
+                                    // CORREGIDO: Se usa 'semestre' en lugar de 'sem'
                                     val res = iaService.procesarImagenHorario(
                                         imagenBase64 = archivoBase64!!,
+                                        mimeType = mimeTypeArchivo!!,
                                         cursosExistentes = cursos,
-                                        semestre = semestre
+                                        semestre = semestre // <-- CORRECCIÓN APLICADA
                                     )
                                     resultado = res
                                 } catch (e: Exception) {

@@ -31,12 +31,18 @@ fun AgregarCursoScreen(
     var nombre by remember { mutableStateOf("") }
     var codigo by remember { mutableStateOf("") }
     var asistenciaMinima by remember { mutableStateOf("75") }
-    var notaMinima by remember { mutableStateOf("4.0") }
+
+    // VALOR FIJO REQUERIDO: 4.0
+    val notaMinimaRequerida = 4.0
+
+    // Validación en tiempo real (Asistencia: 75 a 100, sin decimales)
+    val asistVal = asistenciaMinima.toIntOrNull()
+    val esAsistenciaInvalida = asistVal == null || asistVal < 75 || asistVal > 100
 
     // Lista temporal de horarios que vamos agregando
     val horariosAgregados = remember { mutableStateListOf<ClaseHorario>() }
     var mostrarDialogoHorario by remember { mutableStateOf(false) }
-    var showError by remember { mutableStateOf(false) }
+    var showError by remember { mutableStateOf(false) } // Usado para mostrar error en la parte inferior
 
     Scaffold(
         topBar = {
@@ -86,17 +92,38 @@ fun AgregarCursoScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     OutlinedTextField(
                         value = asistenciaMinima,
-                        onValueChange = { asistenciaMinima = it },
+                        onValueChange = {
+                            // CAMBIO: Solo permitir números naturales (dígitos)
+                            if (it.all { char -> char.isDigit() } && it.length <= 3) {
+                                asistenciaMinima = it
+                            }
+                        },
                         label = { Text("Asist. Mín (%)") },
+                        placeholder = { Text("75 - 100") },
                         modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        isError = esAsistenciaInvalida,
+                        supportingText = {
+                            if (esAsistenciaInvalida) {
+                                Text("Requerido: 75 a 100 (sin decimales)", color = MaterialTheme.colorScheme.error)
+                            } else {
+                                Text("Porcentaje mínimo de asistencia")
+                            }
+                        }
                     )
+
+                    // Campo de Nota Mínima como de solo lectura
                     OutlinedTextField(
-                        value = notaMinima,
-                        onValueChange = { notaMinima = it },
-                        label = { Text("Nota Mín") },
+                        value = notaMinimaRequerida.toString(),
+                        onValueChange = { /* Deshabilitado */ },
+                        readOnly = true, // Evita la edición
+                        label = { Text("Nota Mín (Requerida)") },
+                        placeholder = { Text("4.0") },
                         modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        isError = false,
+                        supportingText = {
+                            Text("Requerida: 4.0") // Muestra el valor fijo
+                        }
                     )
                 }
             }
@@ -137,7 +164,7 @@ fun AgregarCursoScreen(
                 Spacer(Modifier.height(16.dp))
                 if (showError) {
                     Text(
-                        "⚠️ Completa todos los campos obligatorios",
+                        "⚠️ Completa todos los campos obligatorios y verifica los rangos de Asistencia (75-100%)",
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
@@ -146,17 +173,22 @@ fun AgregarCursoScreen(
                 Button(
                     onClick = {
                         val asist = asistenciaMinima.toDoubleOrNull()
-                        val notaMin = notaMinima.toDoubleOrNull()
+                        // Usamos la constante fija
+                        val notaMin = notaMinimaRequerida
 
-                        if (nombre.isNotBlank() && codigo.isNotBlank() &&
-                            asist != null && notaMin != null) {
+                        // Validación de campos obligatorios y rangos
+                        val hayErroresDeValidacion = nombre.isBlank() || codigo.isBlank() ||
+                                esAsistenciaInvalida
+
+                        if (!hayErroresDeValidacion && asist != null) {
 
                             val nuevoCurso = Curso(
                                 idCurso = "curso_${System.currentTimeMillis()}",
                                 nombre = nombre,
                                 codigo = codigo,
+                                // La conversión a Double es necesaria para el objeto Curso, pero se valida como Int
                                 porcentajeAsistenciaMinimo = asist,
-                                notaMinimaAprobacion = notaMin
+                                notaMinimaAprobacion = notaMin // Usamos la constante 4.0
                             )
 
                             // Asignar el ID del curso a los horarios creados
@@ -174,7 +206,9 @@ fun AgregarCursoScreen(
                             showError = true
                         }
                     },
-                    modifier = Modifier.fillMaxWidth().height(50.dp)
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    // Deshabilitar botón si los campos obligatorios están vacíos o hay errores de rango
+                    enabled = nombre.isNotBlank() && codigo.isNotBlank() && !esAsistenciaInvalida
                 ) {
                     Text("Guardar Curso")
                 }

@@ -41,7 +41,8 @@ fun DetalleCursoScreen(
     onEliminarCurso: () -> Unit,
     onArchivarCurso: () -> Unit,
     onEliminarEvaluacion: (Evaluacion) -> Unit,
-    onColorChanged: (String) -> Unit // NUEVO CALLBACK
+    onColorChanged: (String) -> Unit, // NUEVO CALLBACK
+    onEditarEvaluacion: (Evaluacion) -> Unit
 ) {
     var mostrarMenu by remember { mutableStateOf(false) }
     var mostrarDialogoEliminarCurso by remember { mutableStateOf(false) }
@@ -225,6 +226,7 @@ fun DetalleCursoScreen(
                     EvaluacionItem(
                         eval = eval,
                         onEliminar = { evaluacionAEliminar = eval },
+                        onEdit = { onEditarEvaluacion(eval) },
                         colorCurso = colorCurso
                     )
                 }
@@ -340,12 +342,14 @@ fun StatCard(title: String, value: String, subtext: String, color: Color, modifi
 fun EvaluacionItem(
     eval: Evaluacion,
     onEliminar: () -> Unit,
+    onEdit: () -> Unit,
     colorCurso: Color
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
+            .clickable(onClick = onEdit)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -353,6 +357,7 @@ fun EvaluacionItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(eval.getNombre(), fontWeight = FontWeight.SemiBold)
             Text("Vale ${eval.getPorcentaje()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(eval.obtenerTipoEvaluacion(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {

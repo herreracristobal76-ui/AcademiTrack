@@ -26,8 +26,15 @@ fun EditarCursoScreen(
 ) {
     var nombre by remember { mutableStateOf(curso.getNombre()) }
     var codigo by remember { mutableStateOf(curso.getCodigo()) }
-    var asistenciaMinima by remember { mutableStateOf(curso.getPorcentajeAsistenciaMinimo().toString()) }
-    var notaMinima by remember { mutableStateOf(curso.getNotaMinimaAprobacion().toString()) }
+    // Asistencia Mínima se inicializa como String sin decimales
+    var asistenciaMinima by remember { mutableStateOf(curso.getPorcentajeAsistenciaMinimo().toInt().toString()) }
+
+    // NOTA MÍNIMA: Ahora es fija y solo se usa para display.
+    val notaMinimaFija = curso.getNotaMinimaAprobacion().toString()
+
+    // Validación en tiempo real (Asistencia: 75 a 100, sin decimales)
+    val asistVal = asistenciaMinima.toIntOrNull()
+    val esAsistenciaInvalida = asistVal == null || asistVal < 75 || asistVal > 100
 
     // Estado para los horarios (iniciamos con los actuales)
     val listaHorarios = remember { mutableStateListOf<ClaseHorario>().apply { addAll(horariosActuales) } }
@@ -75,17 +82,33 @@ fun EditarCursoScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     OutlinedTextField(
                         value = asistenciaMinima,
-                        onValueChange = { asistenciaMinima = it },
+                        onValueChange = {
+                            // CAMBIO: Solo permitir números naturales (dígitos)
+                            if (it.all { char -> char.isDigit() } && it.length <= 3) {
+                                asistenciaMinima = it
+                            }
+                        },
                         label = { Text("Asist. Mín (%)") },
                         modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        isError = esAsistenciaInvalida,
+                        supportingText = {
+                            if (esAsistenciaInvalida) {
+                                Text("Requerido: 75 a 100 (sin decimales)", color = MaterialTheme.colorScheme.error)
+                            } else {
+                                Text("Porcentaje mínimo de asistencia")
+                            }
+                        }
                     )
                     OutlinedTextField(
-                        value = notaMinima,
-                        onValueChange = { notaMinima = it },
+                        value = notaMinimaFija,
+                        onValueChange = { /* Bloqueado */ },
+                        readOnly = true, // Bloqueado para ser solo 4.0
                         label = { Text("Nota Mín") },
                         modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        supportingText = {
+                            Text("Valor fijo: 4.0")
+                        }
                     )
                 }
             }
@@ -113,15 +136,16 @@ fun EditarCursoScreen(
             item {
                 Spacer(Modifier.height(16.dp))
                 if (showError) {
-                    Text("⚠️ Verifica los datos", color = MaterialTheme.colorScheme.error)
+                    Text("⚠️ Verifica los datos (Nombre, Código, Asistencia Mín.)", color = MaterialTheme.colorScheme.error)
                 }
 
                 Button(
                     onClick = {
                         val asist = asistenciaMinima.toDoubleOrNull()
-                        val notaMin = notaMinima.toDoubleOrNull()
+                        val notaMin = curso.getNotaMinimaAprobacion() // Usar el valor existente/fijo
 
-                        if (nombre.isNotBlank() && codigo.isNotBlank() && asist != null && notaMin != null) {
+                        // Validar asistVal usando el Int y no el Double
+                        if (nombre.isNotBlank() && codigo.isNotBlank() && asist != null && asistVal != null && !esAsistenciaInvalida) {
 
                             val cursoEditado = Curso(
                                 idCurso = curso.getId(),

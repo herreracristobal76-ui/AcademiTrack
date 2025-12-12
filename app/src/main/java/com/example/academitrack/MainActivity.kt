@@ -108,6 +108,7 @@ fun AcademiTrackApp(
     var pantallaActual by remember { mutableStateOf("cursos") }
     var cursoSeleccionado by remember { mutableStateOf<Curso?>(null) }
     var semestreSeleccionado by remember { mutableStateOf<Semestre?>(null) }
+    var evaluacionAEditar by remember { mutableStateOf<Evaluacion?>(null) }
     val context = LocalContext.current
 
     val cursos = remember { mutableStateListOf<Curso>().apply { addAll(persistencia.cargarCursos()) } }
@@ -244,10 +245,40 @@ fun AcademiTrackApp(
                                 if (idx != -1) cursos[idx] = curso
                                 persistencia.guardarCursos(cursos.toList())
                                 triggerUpdate.value = System.currentTimeMillis()
+                            },
+                            onEditarEvaluacion = { eval ->
+                                evaluacionAEditar = eval
+                                pantallaActual = "editar_nota"
                             }
                         )
                     }
                 }
+
+                "editar_nota" -> cursoSeleccionado?.let { curso ->
+                    evaluacionAEditar?.let { eval ->
+                        val totalEvaluado = gestorNotas.calcularPorcentajeTotal(curso.getId())
+                        val maxDisponible = 100.0 - totalEvaluado
+
+                        EditarNotaScreen(
+                            evaluacion = eval,
+                            maxPorcentajeDisponible = maxDisponible,
+                            onVolverClick = {
+                                evaluacionAEditar = null
+                                pantallaActual = "detalle"
+                            }
+                        ) { evalActualizada ->
+                            // Lógica de guardado
+                            gestorNotas.actualizarEvaluacion(evalActualizada)
+                            persistencia.guardarEvaluaciones(gestorNotas.obtenerTodasEvaluaciones())
+
+                            evaluacionAEditar = null
+                            pantallaActual = "detalle"
+                            triggerUpdate.value = System.currentTimeMillis()
+                            Toast.makeText(context, "Nota actualizada", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+
 
                 "agregar_nota" -> cursoSeleccionado?.let { curso ->
                     val disp = 100.0 - gestorNotas.calcularPorcentajeTotal(curso.getId())

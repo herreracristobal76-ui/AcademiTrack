@@ -51,6 +51,13 @@ class GestorNotas {
         return evaluaciones.remove(idEvaluacion) != null
     }
 
+    fun actualizarEvaluacion(evaluacionActualizada: Evaluacion): Boolean {
+        return if (evaluacionActualizada.validar()) {
+            // Simplemente reemplazamos la entrada existente con la actualizada, usando su ID
+            evaluaciones[evaluacionActualizada.getId()] = evaluacionActualizada
+            true
+        } else false
+    }
     fun obtenerTodasEvaluaciones(): Map<String, Evaluacion> {
         return evaluaciones.toMap()
     }

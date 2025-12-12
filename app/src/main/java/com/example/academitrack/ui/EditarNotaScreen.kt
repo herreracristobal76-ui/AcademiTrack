@@ -7,42 +7,42 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.academitrack.app.domain.*
 
-// SOLUCIÓN: Función helper para validar máximo un decimal.
-// Al ser una función de nivel superior en el paquete 'com.academitrack.app.ui',
-// es visible para todos los archivos dentro de este paquete, incluyendo EditarNotaScreen.kt.
-fun String.hasMaxOneDecimal(): Boolean {
-    val parts = this.split('.')
-    return parts.size <= 1 || (parts.size == 2 && parts[1].length <= 1)
-}
+// SOLUCIÓN: La función String.hasMaxOneDecimal() fue movida a AgregarNotaScreen.kt
+// para evitar duplicidad, ya que ambas están en el mismo paquete.
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AgregarNotaScreen(
-    curso: Curso,
-    maxPorcentajeDisponible: Double, // Límite para validar
+fun EditarNotaScreen(
+    evaluacion: Evaluacion,
+    maxPorcentajeDisponible: Double, // Límite real permitido (100 - %otras evaluaciones)
     onVolverClick: () -> Unit,
-    onGuardar: (EvaluacionManual) -> Unit
+    onGuardar: (Evaluacion) -> Unit
 ) {
-    var nombre by remember { mutableStateOf("") }
-    var porcentaje by remember { mutableStateOf("") }
-    var nota by remember { mutableStateOf("") }
+    // Inicializar estados con los valores de la evaluación
+    var nombre by remember { mutableStateOf(evaluacion.getNombre()) }
+    // Inicializar porcentaje como String sin decimales
+    var porcentaje by remember { mutableStateOf(evaluacion.getPorcentaje().toInt().toString()) }
+    // Inicializar nota con un decimal (o vacía)
+    var nota by remember { mutableStateOf(evaluacion.notaObtenida?.let { String.format("%.1f", it) } ?: "") }
+
+    // El porcentaje original de esta evaluación, que debe sumarse al máximo disponible
+    val porcentajeOriginal = evaluacion.getPorcentaje()
+    val maxReal = maxPorcentajeDisponible + porcentajeOriginal
+    val maxRealInt = maxReal.toInt()
 
     // Validaciones en tiempo real
-    // Usamos Int para la validación del porcentaje
     val porcentajeIntVal = porcentaje.toIntOrNull()
-    val maxPorcentajeInt = maxPorcentajeDisponible.toInt()
 
-    // Error si no es un número entero válido, si es mayor al disponible o si es <= 0
-    val esPorcentajeInvalido = porcentajeIntVal == null || porcentajeIntVal > maxPorcentajeInt || porcentajeIntVal <= 0
+    // Es inválido si no es entero, si es mayor que el total disponible o si es <= 0
+    val esPorcentajeInvalido = porcentajeIntVal == null || porcentajeIntVal > maxRealInt || porcentajeIntVal <= 0
 
     val mensajeErrorPorcentaje = when {
         porcentajeIntVal == null -> "Ingresa un número entero"
-        porcentajeIntVal > maxPorcentajeInt -> "Máximo permitido: $maxPorcentajeInt%"
+        porcentajeIntVal > maxRealInt -> "Máximo permitido: $maxRealInt%"
         porcentajeIntVal <= 0 -> "El porcentaje debe ser mayor a 0%"
         else -> null
     }
@@ -56,7 +56,7 @@ fun AgregarNotaScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Agregar Nota Manual") },
+                title = { Text("Editar Nota") },
                 navigationIcon = {
                     IconButton(onClick = onVolverClick) {
                         Icon(Icons.Default.ArrowBack, "Volver")
@@ -73,7 +73,7 @@ fun AgregarNotaScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "Curso: ${curso.getNombre()}",
+                text = "Evaluación de: ${evaluacion.obtenerTipoEvaluacion()}",
                 style = MaterialTheme.typography.titleMedium
             )
 
@@ -81,7 +81,6 @@ fun AgregarNotaScreen(
                 value = nombre,
                 onValueChange = { nombre = it },
                 label = { Text("Nombre de la evaluación") },
-                placeholder = { Text("Ej: Certamen 1") },
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -90,20 +89,20 @@ fun AgregarNotaScreen(
                 value = porcentaje,
                 onValueChange = {
                     // Solo permitir números naturales (dígitos)
-                    if (it.all { char -> char.isDigit() } && it.length <= 3) { // Max 3 digitos para 100
+                    if (it.all { char -> char.isDigit() } && it.length <= 3) {
                         porcentaje = it
                     }
                 },
                 label = { Text("Porcentaje (%)") },
-                placeholder = { Text("Disponible: $maxPorcentajeInt% (sin decimales)") },
+                placeholder = { Text("Máx: $maxRealInt% (sin decimales)") },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 isError = mensajeErrorPorcentaje != null,
                 supportingText = {
                     if (mensajeErrorPorcentaje != null) {
                         Text(mensajeErrorPorcentaje, color = MaterialTheme.colorScheme.error)
-                    } else {
-                        Text("Restante disponible: $maxPorcentajeInt%")
+                    } else if (porcentaje.isNotBlank()) {
+                        Text("El máximo total para el curso es 100%.")
                     }
                 }
             )
@@ -159,25 +158,26 @@ fun AgregarNotaScreen(
                         porc != null && porc > 0 && mensajeErrorPorcentaje == null &&
                         esNotaFinalValida) {
 
-                        val eval = EvaluacionManual(
-                            id = "eval_${System.currentTimeMillis()}",
-                            nombreEval = nombre,
-                            porcentajeEval = porc,
-                            fechaEval = System.currentTimeMillis(),
-                            idCursoEval = curso.getId()
-                        )
-                        eval.setNotaObtenida(notaVal!!)
+                        // Actualizar los campos mutables de la evaluación
+                        evaluacion.setNombre(nombre)
+                        evaluacion.setPorcentaje(porc)
+                        evaluacion.setNotaObtenida(notaVal!!)
 
-                        onGuardar(eval)
+                        // Si es Evaluación Manual, actualizamos sus campos específicos si es necesario
+                        if (evaluacion is EvaluacionManual) {
+                            // No hay cambios necesarios aquí.
+                        }
+
+                        onGuardar(evaluacion)
                         showError = false
                     } else {
                         showError = true
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = mensajeErrorPorcentaje == null // Bloquear botón si hay error de porcentaje
+                enabled = mensajeErrorPorcentaje == null
             ) {
-                Text("💾 Guardar Nota")
+                Text("💾 Guardar Cambios")
             }
         }
     }
