@@ -42,11 +42,9 @@ class HorarioIAService(private val apiKey: String) {
         try {
             Log.d(TAG, "🔍 Procesando horario para ${semestre.obtenerNombre()} (MIME: $mimeType)")
 
-
             val imagenParaEnvio = if (mimeType.startsWith("image") && (mimeType.contains("jpeg") || mimeType.contains("png"))) {
                 optimizarImagen(imagenBase64)
             } else {
-
                 imagenBase64
             }
 
@@ -69,7 +67,7 @@ class HorarioIAService(private val apiKey: String) {
                 
                 Contexto: Semestre ${semestre.obtenerNombre()}. $cursosInfo
                 
-                FORMATO DE RESPUESTA (SOLO JSON, sin prefijos, sin texto adicional, sin \`\`\`):
+                FORMATO DE RESPUESTA (SOLO JSON, sin prefijos, sin texto adicional, sin ```):
                 {
                     "cursos": [
                         {
@@ -94,12 +92,12 @@ class HorarioIAService(private val apiKey: String) {
                 • Si no hay datos, la clave "cursos" debe ser un array vacío: [].
             """.trimIndent()
 
-
+            // ⭐ MODELOS CORREGIDOS - SIN el prefijo "models/"
             val modelos = listOf(
-                "models/gemini-2.5-flash",
-                "models/gemini-flash-latest",
-                "models/gemini-2.0-flash-001",
-                "models/gemini-2.5-pro"
+                "gemini-2.5-flash",
+                "gemini-flash-latest",
+                "gemini-2.0-flash-001",
+                "gemini-2.5-pro"
             )
 
             Log.d(TAG, "🎯 Estrategia: Probar ${modelos.size} modelos optimizados")
@@ -150,7 +148,6 @@ class HorarioIAService(private val apiKey: String) {
                     }
                 }
             }
-
 
             throw Exception("""
                 ❌ ERROR: No se pudo procesar el documento.
@@ -215,6 +212,7 @@ class HorarioIAService(private val apiKey: String) {
         cursosExistentes: List<Curso>,
         semestre: Semestre
     ): ResultadoHorarioConCursos {
+        // ⭐ CORRECCIÓN: Ahora el modelo se agrega directamente con "models/" en la URL
         val url = "$BASE_URL/models/$modelo:generateContent?key=$apiKey"
 
         val requestBody = JSONObject().apply {
@@ -263,14 +261,10 @@ class HorarioIAService(private val apiKey: String) {
         if (!response.isSuccessful) {
             Log.e(TAG, "❌ Error HTTP ${response.code}: $responseBody")
 
-
             val errorMsg = when (response.code) {
                 400 -> "❌ ERROR 400: Imagen corrupta o inválida. Intenta recortar o usar JPG."
                 401 -> "❌ ERROR 401: API Key inválida. Revisa tu clave en MainActivity.kt."
-                403 -> {
-
-                    "❌ ERROR 403 (Prohibido): Tu clave API no tiene permisos. SOLUCIÓN: Verifica que el Billing esté activado en tu cuenta de Google Cloud."
-                }
+                403 -> "❌ ERROR 403 (Prohibido): Tu clave API no tiene permisos. SOLUCIÓN: Verifica que el Billing esté activado en tu cuenta de Google Cloud."
                 404 -> "❌ ERROR 404: Modelo $modelo no disponible."
                 429 -> {
                     val retryAfter = response.header("Retry-After")?.toLongOrNull() ?: 60
@@ -316,14 +310,12 @@ class HorarioIAService(private val apiKey: String) {
             try {
                 datos = JSONObject(jsonLimpio)
             } catch (e: Exception) {
-                // Mensaje acortado
                 throw Exception("ERROR de formato: La IA no devolvió un JSON válido. Verifica la claridad del documento.")
             }
 
             val cursosArray = datos.optJSONArray("cursos")
 
             if (cursosArray == null || cursosArray.length() == 0) {
-
                 throw Exception("ERROR: No se detectó una tabla de horarios válida en el documento.")
             }
 
@@ -392,10 +384,8 @@ class HorarioIAService(private val apiKey: String) {
             }
 
             if (todasLasClases.isEmpty()) {
-
                 throw Exception("ERROR: No se pudo extraer ninguna clase válida. Intenta con una imagen más nítida.")
             }
-
 
             return ResultadoHorarioConCursos(
                 exito = todasLasClases.isNotEmpty(),
