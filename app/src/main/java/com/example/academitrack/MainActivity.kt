@@ -31,7 +31,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var persistencia: PersistenciaLocal
 
     private val apiKeys = listOf(
-        "AIzaSyD7EUi4eVHhNsLeoDN1Z5dksFACtPlhU64"
+        "AIzaSyB2flJQlwd9KDgwWe0bgXrmapeELKYM4mA",
+        "AIzaSyC_4bOHOrpSvdmdakoGXAkLQa8vrnJMSE0"
     )
     init {
         if (apiKeys.size == 1) {
